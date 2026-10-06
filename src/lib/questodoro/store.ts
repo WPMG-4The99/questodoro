@@ -10,6 +10,12 @@ import {
   xpForWork,
 } from "@/lib/questodoro/rules";
 import {
+  MAX_CHECK_INS,
+  parseCheckIns,
+  type CheckInEntry,
+  type CheckInKind,
+} from "@/lib/questodoro/check-ins";
+import {
   DEFAULT_MISSIONS,
   DEFAULT_REWARDS,
   MAX_MISSIONS,
@@ -113,6 +119,7 @@ type PersistShape = QuestStats & {
   selectedMissionId: string | null;
   rotateIndex: number;
   completedIds: string[];
+  checkIns: CheckInEntry[];
 };
 
 type QuestState = QuestStats & {
@@ -133,11 +140,13 @@ type QuestState = QuestStats & {
   completedIds: string[];
   breakMission: BreakMission | null;
   missionRuns: MissionRun[];
+  checkIns: CheckInEntry[];
   hydrate: () => void;
   start: () => void;
   pause: () => void;
   reset: () => void;
   checkIn: () => void;
+  logCheckIn: (kind: CheckInKind) => void;
   skipMission: () => void;
   selectMission: (id: string) => void;
   startMission: (id: string) => void;
@@ -205,6 +214,7 @@ function persistFields(state: PersistShape): PersistShape {
     selectedMissionId: state.selectedMissionId,
     rotateIndex: state.rotateIndex,
     completedIds: state.completedIds,
+    checkIns: state.checkIns,
   };
 }
 
@@ -271,6 +281,7 @@ function readPersist(): PersistShape | null {
       completedIds: Array.isArray(parsed.completedIds)
         ? parsed.completedIds.filter((id): id is string => typeof id === "string")
         : [],
+      checkIns: parseCheckIns(parsed.checkIns),
     };
   } catch {
     return null;
@@ -533,6 +544,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   completedIds: [],
   breakMission: null,
   missionRuns: [],
+  checkIns: [],
 
   hydrate: () => {
     if (get().hydrated) return;
@@ -615,6 +627,13 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       return;
     }
     set(resolveMission(s, "done"));
+  },
+
+  logCheckIn: (kind: CheckInKind) => {
+    const s = get();
+    const entry: CheckInEntry = { id: newId("c"), kind, at: Date.now() };
+    set({ checkIns: [...s.checkIns, entry].slice(-MAX_CHECK_INS) });
+    persistNow();
   },
 
   skipMission: () => {

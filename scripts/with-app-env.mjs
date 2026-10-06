@@ -104,6 +104,17 @@ export function isMainModule(moduleUrl) {
   }
 }
 
+/**
+ * Windows `spawn("vite")` does not resolve `vite.cmd` on PATH. A shell does.
+ * Paths (and anything with a space) stay a direct spawn so quoting is Node's job.
+ */
+export function childSpawnOptions(command, platform = process.platform) {
+  const bareName =
+    !command.includes("/") && !command.includes("\\") && !command.includes(" ");
+  if (platform === "win32" && bareName) return { shell: true };
+  return {};
+}
+
 function main(argv) {
   const [command, ...args] = argv;
   if (!command) {
@@ -111,7 +122,11 @@ function main(argv) {
     process.exit(2);
   }
   const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
-  const child = spawn(command, args, { stdio: "inherit", env });
+  const child = spawn(command, args, {
+    stdio: "inherit",
+    env,
+    ...childSpawnOptions(command),
+  });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(signal, () => child.kill(signal));

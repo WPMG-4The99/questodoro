@@ -1,7 +1,7 @@
 import { rankFromXp } from "@/lib/questodoro/rules";
 
 export const MISSION_XP = 8;
-export const MAX_MISSIONS = 8;
+export const MAX_MISSIONS = 3;
 export const MAX_LIVE_MISSIONS = 3;
 export const SIDE_XP_DAILY_CAP = 100;
 export const MAX_REWARDS = 8;
@@ -54,18 +54,6 @@ export const DEFAULT_MISSIONS: Mission[] = [
     title: "Water hit",
     brief: "Drink and check in.",
     seconds: 20,
-  },
-  {
-    id: "m-focus",
-    title: "Far focus",
-    brief: "Look ~20 feet away.",
-    seconds: 20,
-  },
-  {
-    id: "m-custom",
-    title: "Custom",
-    brief: "Your one-liner.",
-    seconds: 30,
   },
 ];
 

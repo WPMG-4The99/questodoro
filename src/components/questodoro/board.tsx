@@ -5,6 +5,8 @@ import {
   RotateCcw,
   Target,
 } from "lucide-react";
+import { CheckInFeed } from "@/components/questodoro/check-in-feed";
+import { NewUserBrief } from "@/components/questodoro/new-user-brief";
 import { DurationStepper } from "@/components/questodoro/duration-stepper";
 import { MissionRunClock } from "@/components/questodoro/mission-run-clock";
 import { MissionsPanel } from "@/components/questodoro/missions-panel";
@@ -110,6 +112,8 @@ export function QuestodoroBoard() {
   const tickMissions = useQuestStore((s) => s.tickMissions);
   const rollIfNeeded = useQuestStore((s) => s.rollIfNeeded);
   const clearBanner = useQuestStore((s) => s.clearBanner);
+  const checkIns = useQuestStore((s) => s.checkIns);
+  const logCheckIn = useQuestStore((s) => s.logCheckIn);
   const todayRollup = useQuestStore((s) => s.todayRollup);
   const yesterday = useQuestStore((s) => s.yesterday);
 
@@ -226,6 +230,8 @@ export function QuestodoroBoard() {
             {lastMissionXp > 0 ? ` · Last mission +${lastMissionXp}` : ""}
           </p>
         </div>
+
+        <NewUserBrief />
 
         <section className="stagger-item flex shrink-0 flex-col gap-3 rounded-xl bg-surface px-4 py-3 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)] sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -386,14 +392,17 @@ export function QuestodoroBoard() {
             onComplete={completeMission}
           />
 
-          <RewardsShelf
-            className="stagger-item h-full min-h-0 flex-1"
-            rewards={rewards}
-            onAdd={addReward}
-            onRename={updateRewardTitle}
-            onRemove={removeReward}
-            onClaim={claimReward}
-          />
+          <div className="stagger-item flex min-h-0 flex-col gap-5">
+            <CheckInFeed entries={checkIns} onCheckIn={logCheckIn} />
+            <RewardsShelf
+              className="min-h-0 flex-1"
+              rewards={rewards}
+              onAdd={addReward}
+              onRename={updateRewardTitle}
+              onRemove={removeReward}
+              onClaim={claimReward}
+            />
+          </div>
         </div>
       </div>
     </main>

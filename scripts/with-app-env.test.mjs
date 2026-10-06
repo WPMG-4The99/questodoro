@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { promisify } from "node:util";
 import {
   APP_ENV_REL_PATH,
+  childSpawnOptions,
   mergeAppEnv,
   parseAppEnv,
   projectRoot,
@@ -57,6 +58,12 @@ test("an explicit process-env override wins over the file", () => {
   );
   assert.equal(merged.VITE_AUTH_ENABLED, "true");
   assert.equal(merged.PATH, "/usr/bin");
+});
+
+test("windows spawn uses a shell so npm bin shims resolve", () => {
+  assert.deepEqual(childSpawnOptions("vite", "win32"), { shell: true });
+  assert.deepEqual(childSpawnOptions("C:\\Program Files\\nodejs\\node.exe", "win32"), {});
+  assert.deepEqual(childSpawnOptions("vite", "linux"), {});
 });
 
 test("the template ships auth off", () => {

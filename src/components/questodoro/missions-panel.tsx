@@ -74,8 +74,8 @@ export function MissionsPanel({
         {sideCapped ? "capped" : `${sideXpToday}/${SIDE_XP_DAILY_CAP}`} today.
       </p>
 
-      <ol className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto">
-        {missions.map((mission, index) => {
+      <ol className="mt-4 space-y-2">
+        {missions.slice(0, MAX_MISSIONS).map((mission, index) => {
           const selected = mission.id === selectedId;
           const done = completedIds.includes(mission.id);
           const run = missionRuns.find((item) => item.id === mission.id);
@@ -244,16 +244,12 @@ export function MissionsPanel({
         })}
       </ol>
 
-      <Button
-        type="button"
-        variant="ghost"
-        className="mt-2 w-full"
-        disabled={missions.length >= MAX_MISSIONS}
-        onClick={onAdd}
-      >
-        <Plus />
-        Add mission
-      </Button>
+      {missions.length >= MAX_MISSIONS ? null : (
+        <Button type="button" variant="ghost" className="mt-2 w-full" onClick={onAdd}>
+          <Plus />
+          Add mission
+        </Button>
+      )}
     </section>
   );
 }
