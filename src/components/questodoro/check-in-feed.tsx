@@ -38,7 +38,7 @@ export function CheckInFeed({
   return (
     <section
       className={cn(
-        "flex shrink-0 flex-col rounded-xl bg-surface p-5 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
+        "flex shrink-0 flex-col rounded-xl bg-surface p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
         className,
       )}
     >
@@ -49,13 +49,13 @@ export function CheckInFeed({
         </h2>
       </div>
       {compact ? null : (
-        <p className="mt-1 text-xs leading-snug text-muted">
+        <p className="mt-1 text-[11px] leading-tight text-muted">
           {partnerHandle
             ? `Messages for ${partnerHandle}. These messages do not give XP.`
             : "Messages for the person on the challenge with you. These messages do not give XP."}
         </p>
       )}
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-2 grid grid-cols-3 gap-2">
         {CHECK_IN_PRESETS.map((preset) => (
           <Button
             key={preset.kind}

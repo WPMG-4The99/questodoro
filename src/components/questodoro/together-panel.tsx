@@ -32,7 +32,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
   return (
     <section
       className={cn(
-        "flex shrink-0 flex-col rounded-xl bg-surface p-5 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
+        "flex shrink-0 flex-col rounded-xl bg-surface p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
         compact && "bg-transparent p-0 shadow-none",
         className,
       )}
@@ -49,7 +49,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
         </p>
       </div>
       {compact ? null : (
-        <p className="mt-1 text-xs leading-snug text-muted">
+        <p className="mt-1 text-[11px] leading-tight text-muted">
           You can work alone. Or send one invite. The other person signs up and enters your code.
           Your check-ins go to that person.
         </p>
@@ -68,8 +68,8 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
           </Button>
         </div>
       ) : waiting ? (
-        <div className={compact ? "mt-2" : "mt-3"}>
-          <p className={compact ? "text-xs leading-snug text-muted" : "text-sm text-muted"}>
+        <div className="mt-2">
+          <p className={compact ? "text-[11px] leading-tight text-muted" : "text-xs leading-tight text-muted"}>
             Wait for {partnerHandle}. That person creates a handle and a pin. Then that person enters
             this code.
           </p>
@@ -82,7 +82,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
           >
             {inviteCode}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <Button type="button" size="compact" onClick={markPartnerIn}>
               Confirm partner
             </Button>
@@ -110,6 +110,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
               aria-label="Challenge name"
               value={title}
               maxLength={32}
+              className="h-9 min-h-9"
               onChange={(event) => setTitle(event.target.value)}
             />
           )}
@@ -118,7 +119,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
             placeholder="Their handle"
             value={handle}
             maxLength={16}
-            className={compact ? "h-9 min-h-9" : undefined}
+            className="h-9 min-h-9"
             onChange={(event) => setHandle(event.target.value)}
           />
           <Button

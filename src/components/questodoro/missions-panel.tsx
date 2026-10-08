@@ -36,7 +36,7 @@ function MissionTitle({
       value={locked ? mission.title : draft}
       maxLength={32}
       disabled={locked}
-      className="h-10 min-h-10"
+      className="h-9 min-h-9"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         if (draft !== mission.title) onUpdate(mission.id, { title: draft });
@@ -99,7 +99,7 @@ export function MissionsPanel({
   return (
     <section
       className={cn(
-        "flex min-h-0 flex-col rounded-xl bg-surface p-5 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
+        "flex min-h-0 flex-col rounded-xl bg-surface p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
         className,
       )}
     >
@@ -114,12 +114,12 @@ export function MissionsPanel({
           {liveCount}/{config.maxLiveMissions} live · {missionStreak} in a row
         </p>
       </div>
-      <p className="mt-1 text-xs text-muted">
+      <p className="mt-1 text-[11px] leading-tight text-muted">
         On demand. Own clocks. Max {config.maxLiveMissions} at once. Side XP{" "}
         {sideCapped ? "capped" : `${sideXpToday}/${config.sideXpDailyCap}`} today.
       </p>
 
-      <ol className="mt-4 space-y-2">
+      <ol className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
         {missions.slice(0, MAX_MISSIONS).map((mission, index) => {
           const selected = mission.id === selectedId;
           const done = completedIds.includes(mission.id);
@@ -137,7 +137,7 @@ export function MissionsPanel({
             <li
               key={mission.id}
               className={cn(
-                "rounded-md bg-well p-2",
+                "flex flex-1 flex-col rounded-md bg-well p-2",
                 paused && "opacity-70",
                 done
                   ? "shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-olive)_55%,transparent)]"

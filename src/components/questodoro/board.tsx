@@ -194,9 +194,9 @@ export function QuestodoroBoard() {
 
   return (
     <main className="h-dvh overflow-hidden bg-bg text-fg">
-      <div className="mx-auto flex h-full w-full max-w-board flex-col gap-3 overflow-hidden px-4 py-3">
-        <header className="flex shrink-0 flex-col gap-4 border-b border-border pb-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
-          <div className="stagger-item flex items-center gap-4">
+      <div className="mx-auto flex h-full w-full max-w-board flex-col gap-2 overflow-hidden px-4 py-2">
+        <header className="flex shrink-0 flex-col gap-3 border-b border-border pb-3 2xl:flex-row 2xl:items-end 2xl:justify-between">
+          <div className="stagger-item flex items-center gap-3">
             <PhyreMark className="size-14 shrink-0" />
             <div>
               <p className="font-display text-xs font-semibold uppercase tracking-kicker text-olive">
@@ -215,7 +215,7 @@ export function QuestodoroBoard() {
               </p>
             </div>
           </div>
-          <div className="stagger-item grid w-full grid-cols-2 gap-3 sm:grid-cols-4 2xl:max-w-3xl 2xl:flex-1">
+          <div className="stagger-item grid w-full grid-cols-2 gap-2 sm:grid-cols-4 2xl:max-w-3xl 2xl:flex-1">
             <StatChip label="Level" value={rank.level} hint={`${rank.toNext} XP to next`} />
             <StatChip label="XP" value={totalXp} hint={`${todayXp} today`} />
             <StatChip label="Streak" value={streak} hint="Days with a finished work block" />
@@ -239,7 +239,7 @@ export function QuestodoroBoard() {
           </p>
         </div>
 
-        <section className="stagger-item flex shrink-0 flex-col gap-3 rounded-xl bg-surface px-4 py-3 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)] sm:flex-row sm:items-center sm:justify-between">
+        <section className="stagger-item flex shrink-0 flex-col gap-2 rounded-xl bg-surface px-3 py-2 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)] sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="font-display text-xs font-semibold uppercase tracking-kicker text-muted">
               Yesterday you
@@ -276,8 +276,8 @@ export function QuestodoroBoard() {
           </div>
         </section>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 2xl:grid-cols-3 2xl:gap-5">
-          <section className="stagger-item flex min-h-0 flex-col gap-4 rounded-xl bg-surface p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)] 2xl:p-6">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 2xl:grid-cols-3 2xl:gap-4">
+          <section className="stagger-item flex min-h-0 flex-col gap-3 rounded-xl bg-surface p-3 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)] 2xl:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-muted">
                 <Target className="size-4 text-olive" />
@@ -329,7 +329,7 @@ export function QuestodoroBoard() {
             </div>
 
             {locked ? null : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <DurationStepper
                   label="Work"
                   seconds={workSeconds}
@@ -347,7 +347,7 @@ export function QuestodoroBoard() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 2xl:grid-cols-4">
               {runState === "running" ? (
                 <Button type="button" variant="secondary" onClick={pause}>
                   <Pause />
@@ -397,7 +397,7 @@ export function QuestodoroBoard() {
             onComplete={completeMission}
           />
 
-          <div className="stagger-item flex min-h-0 flex-col gap-3 overflow-hidden">
+          <div className="stagger-item flex min-h-0 flex-col gap-2 overflow-hidden">
             <TogetherPanel />
             <CheckInFeed
               entries={checkIns}
