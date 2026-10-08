@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Crosshair, Minus, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQuestConfig } from "@/lib/questodoro/nona-config";
 import {
-  MAX_LIVE_MISSIONS,
   MAX_MISSIONS,
   MISSION_LENGTH_MAX,
   MISSION_LENGTH_MIN,
   MISSION_LENGTH_STEP,
-  SIDE_XP_DAILY_CAP,
   MISSION_COLORS,
   pausePenaltyXp,
   pausedTotalMs,
@@ -89,7 +88,8 @@ export function MissionsPanel({
   const liveCount = missionRuns.filter(
     (run) => run.runState === "running" || run.runState === "paused",
   ).length;
-  const sideCapped = sideXpToday >= SIDE_XP_DAILY_CAP;
+  const config = useQuestConfig();
+  const sideCapped = sideXpToday >= config.sideXpDailyCap;
   useEffect(() => {
     if (!missionRuns.some((run) => run.runState === "paused")) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -111,12 +111,12 @@ export function MissionsPanel({
           </h2>
         </div>
         <p className="font-display text-xs uppercase tracking-wider text-muted">
-          {liveCount}/{MAX_LIVE_MISSIONS} live · {missionStreak} in a row
+          {liveCount}/{config.maxLiveMissions} live · {missionStreak} in a row
         </p>
       </div>
       <p className="mt-1 text-xs text-muted">
-        On demand. Own clocks. Max {MAX_LIVE_MISSIONS} at once. Side XP{" "}
-        {sideCapped ? "capped" : `${sideXpToday}/${SIDE_XP_DAILY_CAP}`} today.
+        On demand. Own clocks. Max {config.maxLiveMissions} at once. Side XP{" "}
+        {sideCapped ? "capped" : `${sideXpToday}/${config.sideXpDailyCap}`} today.
       </p>
 
       <ol className="mt-4 space-y-2">
@@ -132,7 +132,7 @@ export function MissionsPanel({
           const penalty = paused ? pausePenaltyXp(pausedMs) : 0;
           const locked = mission.editsLeft <= 0;
           const missionXp = xpForMission(mission.seconds);
-          const atLiveCap = !run && liveCount >= MAX_LIVE_MISSIONS;
+          const atLiveCap = !run && liveCount >= config.maxLiveMissions;
           return (
             <li
               key={mission.id}

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQuestConfig } from "@/lib/questodoro/nona-config";
 import { useQuestStore } from "@/lib/questodoro/store";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
   const challengeTitle = useQuestStore((s) => s.challengeTitle);
   const togetherStatus = useQuestStore((s) => s.togetherStatus);
   const rezSick = useQuestStore((s) => s.rezSick);
+  const rezSickEnabled = useQuestConfig().rezSickEnabled;
   const invitePartner = useQuestStore((s) => s.invitePartner);
   const markPartnerIn = useQuestStore((s) => s.markPartnerIn);
   const leaveTogether = useQuestStore((s) => s.leaveTogether);
@@ -43,7 +45,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
           </h2>
         </div>
         <p className="font-display text-xs uppercase tracking-wider text-muted">
-          {rezSick ? "REZ SICK" : paired ? "Paired" : waiting ? "Invite out" : "Solo"}
+          {rezSick && rezSickEnabled ? "REZ SICK" : paired ? "Paired" : waiting ? "Invite out" : "Solo"}
         </p>
       </div>
       {compact ? null : (

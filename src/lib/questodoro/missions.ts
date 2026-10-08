@@ -1,3 +1,4 @@
+import { getQuestConfig } from "@/lib/questodoro/nona-config";
 import { rankFromXp } from "@/lib/questodoro/rules";
 
 export const MISSION_XP = 8;
@@ -114,9 +115,10 @@ export function clampMissionSeconds(seconds: number) {
   return Math.min(MISSION_LENGTH_MAX, Math.max(MISSION_LENGTH_MIN, stepped));
 }
 
-/** 1 XP per 5 seconds, bounded to 2–20. Daily side total is capped separately. */
+/** 1 XP per 5 seconds, bounded by the XP scale. Daily side total is capped separately. */
 export function xpForMission(seconds: number) {
-  return Math.min(20, Math.max(2, Math.round(clampMissionSeconds(seconds) / 5)));
+  const { xpMin, xpMax } = getQuestConfig();
+  return Math.min(xpMax, Math.max(xpMin, Math.round(clampMissionSeconds(seconds) / 5)));
 }
 
 /** Full minutes paused after the 2-minute grace. Each minute is 1 side XP. */
@@ -135,7 +137,7 @@ export function pausedTotalMs(
 
 /** REZ SICK multiplies earned XP by 0.75. Round down. */
 export function applyRez(xp: number, rezSick: boolean) {
-  if (!rezSick || xp <= 0) return xp;
+  if (!getQuestConfig().rezSickEnabled || !rezSick || xp <= 0) return xp;
   return Math.floor(xp * 0.75);
 }
 

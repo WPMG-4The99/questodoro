@@ -21,12 +21,12 @@ import {
   parseTogether,
   type TogetherStatus,
 } from "@/lib/questodoro/together";
+import { getQuestConfig } from "@/lib/questodoro/nona-config";
 import {
   DEFAULT_MISSIONS,
   DEFAULT_REWARDS,
   MAX_MISSIONS,
   MAX_REWARDS,
-  MAX_LIVE_MISSIONS,
   MISSION_COLORS,
   MISSION_XP,
   SIDE_XP_DAILY_CAP,
@@ -475,7 +475,8 @@ function awardMissionComplete(s: QuestState, id: string): Partial<QuestState> {
   const pausedMs = run ? pausedTotalMs(run, Date.now()) : 0;
   const penalty = pausePenaltyXp(pausedMs);
   const rolled = rollDay(s);
-  const room = Math.max(0, SIDE_XP_DAILY_CAP - rolled.sideXpToday);
+  const sideCap = getQuestConfig().sideXpDailyCap;
+  const room = Math.max(0, sideCap - rolled.sideXpToday);
   const net = Math.max(0, xpForMission(mission.seconds) - penalty);
   const capped = Math.min(net, room);
   const awarded = applyRez(capped, s.rezSick);
@@ -523,7 +524,7 @@ function awardMissionComplete(s: QuestState, id: string): Partial<QuestState> {
     banner: clearRez
       ? "CLEARED"
       : awarded <= 0
-        ? `MISSION DONE: ${mission.title.toUpperCase()}.${loss} SIDE XP CAPPED (${SIDE_XP_DAILY_CAP}/DAY).`
+        ? `MISSION DONE: ${mission.title.toUpperCase()}.${loss} SIDE XP CAPPED (${sideCap}/DAY).`
         : `MISSION COMPLETE: ${mission.title.toUpperCase()}. +${awarded} XP.${loss}`,
   };
 }
@@ -808,8 +809,9 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const liveCount = s.missionRuns.filter(
       (run) => run.runState === "running" || run.runState === "paused",
     ).length;
-    if (!existing && liveCount >= MAX_LIVE_MISSIONS) {
-      set({ banner: "MAX 3 SIDE MISSIONS LIVE." });
+    const maxLive = getQuestConfig().maxLiveMissions;
+    if (!existing && liveCount >= maxLive) {
+      set({ banner: `MAX ${maxLive} SIDE MISSIONS LIVE.` });
       return;
     }
     const remaining =

@@ -13,7 +13,7 @@ import { RewardsShelf } from "@/components/questodoro/rewards-shelf";
 import { TimerRing } from "@/components/questodoro/timer-ring";
 import { TogetherPanel } from "@/components/questodoro/together-panel";
 import { Button } from "@/components/ui/button";
-import { SIDE_XP_DAILY_CAP } from "@/lib/questodoro/missions";
+import { useQuestConfig } from "@/lib/questodoro/nona-config";
 import {
   DRILL_WORK_SECONDS,
   rankFromXp,
@@ -88,6 +88,7 @@ export function QuestodoroBoard() {
   const missionStreak = useQuestStore((s) => s.missionStreak);
   const sideXpToday = useQuestStore((s) => s.sideXpToday);
   const rezSick = useQuestStore((s) => s.rezSick);
+  const config = useQuestConfig();
   const completedIds = useQuestStore((s) => s.completedIds);
   const missionRuns = useQuestStore((s) => s.missionRuns);
   const start = useQuestStore((s) => s.start);
@@ -204,7 +205,7 @@ export function QuestodoroBoard() {
               <h1 className="font-display text-5xl font-semibold leading-none tracking-display text-fg 2xl:text-6xl">
                 QUESTODORO
               </h1>
-              {rezSick ? (
+              {rezSick && config.rezSickEnabled ? (
                 <p className="mt-1 font-display text-sm font-semibold uppercase tracking-wider text-ember">
                   REZ SICK
                 </p>
@@ -231,8 +232,8 @@ export function QuestodoroBoard() {
           </div>
           <p className="font-display text-xs uppercase tracking-wider text-muted">
             Level {rank.level} · {rank.intoLevel} / {rank.xpPerLevel} · Work {nextBlockXp} XP ·
-            Side XP {sideXpToday}/{SIDE_XP_DAILY_CAP}
-            {sideXpToday >= SIDE_XP_DAILY_CAP ? " · Capped" : ""}
+            Side XP {sideXpToday}/{config.sideXpDailyCap}
+            {sideXpToday >= config.sideXpDailyCap ? " · Capped" : ""}
             {lastXpGain > 0 ? ` · Last work +${lastXpGain}` : ""}
             {lastMissionXp > 0 ? ` · Last mission +${lastMissionXp}` : ""}
           </p>
@@ -311,11 +312,12 @@ export function QuestodoroBoard() {
               <p
                 className={cn(
                   "text-center font-display text-sm font-semibold uppercase tracking-wider",
-                  banner ? "text-olive" : "text-muted",
+                  banner || config.banner ? "text-olive" : "text-muted",
                 )}
                 aria-live="polite"
               >
-                {banner ??
+                {banner ||
+                  config.banner ||
                   (phase === "break"
                     ? "Rest. Missions stay on demand."
                     : runState === "paused"
