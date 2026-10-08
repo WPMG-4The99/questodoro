@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Crosshair, Minus, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +9,42 @@ import {
   MISSION_LENGTH_MIN,
   MISSION_LENGTH_STEP,
   SIDE_XP_DAILY_CAP,
+  MISSION_COLORS,
+  pausePenaltyXp,
+  pausedTotalMs,
   xpForMission,
   type Mission,
 } from "@/lib/questodoro/missions";
 import type { MissionRun } from "@/lib/questodoro/store";
 import { cn, formatMmSs } from "@/lib/utils";
+
+function MissionTitle({
+  mission,
+  locked,
+  onUpdate,
+}: {
+  mission: Mission;
+  locked: boolean;
+  onUpdate: (id: string, patch: Partial<Pick<Mission, "title">>) => void;
+}) {
+  const [draft, setDraft] = useState(mission.title);
+  useEffect(() => {
+    setDraft(mission.title);
+  }, [mission.title, locked]);
+  return (
+    <Input
+      aria-label="Mission title"
+      value={locked ? mission.title : draft}
+      maxLength={32}
+      disabled={locked}
+      className="h-10 min-h-10"
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== mission.title) onUpdate(mission.id, { title: draft });
+      }}
+    />
+  );
+}
 
 export function MissionsPanel({
   missions,
@@ -25,6 +57,7 @@ export function MissionsPanel({
   onAdd,
   onUpdate,
   onRemove,
+  onBail,
   onMove,
   onStart,
   onPause,
@@ -39,18 +72,30 @@ export function MissionsPanel({
   missionRuns: MissionRun[];
   onSelect: (id: string) => void;
   onAdd: () => void;
-  onUpdate: (id: string, patch: Partial<Pick<Mission, "title" | "brief" | "seconds">>) => void;
+  onUpdate: (
+    id: string,
+    patch: Partial<Pick<Mission, "title" | "brief" | "seconds" | "color" | "restart">>,
+  ) => void;
   onRemove: (id: string) => void;
+  onBail: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
   onStart: (id: string) => void;
   onPause: (id: string) => void;
   onComplete: (id: string) => void;
   className?: string;
 }) {
+  const [ask, setAsk] = useState<null | { kind: "pause" | "bail"; id: string }>(null);
+  const [now, setNow] = useState(() => Date.now());
   const liveCount = missionRuns.filter(
     (run) => run.runState === "running" || run.runState === "paused",
   ).length;
   const sideCapped = sideXpToday >= SIDE_XP_DAILY_CAP;
+  useEffect(() => {
+    if (!missionRuns.some((run) => run.runState === "paused")) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [missionRuns]);
+  const asked = missions.find((mission) => mission.id === ask?.id) ?? null;
   return (
     <section
       className={cn(
@@ -83,6 +128,9 @@ export function MissionsPanel({
           const running = run?.runState === "running";
           const paused = run?.runState === "paused";
           const remaining = run ? run.remainingMs : mission.seconds * 1000;
+          const pausedMs = run ? pausedTotalMs(run, now) : 0;
+          const penalty = paused ? pausePenaltyXp(pausedMs) : 0;
+          const locked = mission.editsLeft <= 0;
           const missionXp = xpForMission(mission.seconds);
           const atLiveCap = !run && liveCount >= MAX_LIVE_MISSIONS;
           return (
@@ -90,6 +138,7 @@ export function MissionsPanel({
               key={mission.id}
               className={cn(
                 "rounded-md bg-well p-2",
+                paused && "opacity-70",
                 done
                   ? "shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-olive)_55%,transparent)]"
                   : selected
@@ -110,13 +159,7 @@ export function MissionsPanel({
                 >
                   {index + 1}
                 </button>
-                <Input
-                  aria-label="Mission title"
-                  value={mission.title}
-                  maxLength={32}
-                  className="h-10 min-h-10"
-                  onChange={(event) => onUpdate(mission.id, { title: event.target.value })}
-                />
+                <MissionTitle mission={mission} locked={locked} onUpdate={onUpdate} />
                 <button
                   type="button"
                   className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-surface hover:text-fg disabled:opacity-30"
@@ -140,7 +183,7 @@ export function MissionsPanel({
                   className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-surface hover:text-ember disabled:opacity-30"
                   aria-label={`Remove ${mission.title || "mission"}`}
                   disabled={missions.length <= 1}
-                  onClick={() => onRemove(mission.id)}
+                  onClick={() => (locked ? setAsk({ kind: "bail", id: mission.id }) : onRemove(mission.id))}
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -150,6 +193,7 @@ export function MissionsPanel({
                 value={mission.brief}
                 maxLength={80}
                 placeholder="One-liner"
+                disabled={locked}
                 className="mt-1 h-9 min-h-9"
                 onChange={(event) => onUpdate(mission.id, { brief: event.target.value })}
               />
@@ -169,7 +213,7 @@ export function MissionsPanel({
                           type="button"
                           className="flex size-9 items-center justify-center rounded-sm text-fg hover:bg-well disabled:opacity-40"
                           aria-label={`Decrease ${mission.title || "mission"} length`}
-                          disabled={mission.seconds <= MISSION_LENGTH_MIN}
+                          disabled={locked || mission.seconds <= MISSION_LENGTH_MIN}
                           onClick={() =>
                             onUpdate(mission.id, {
                               seconds: mission.seconds - MISSION_LENGTH_STEP,
@@ -185,7 +229,7 @@ export function MissionsPanel({
                           type="button"
                           className="flex size-9 items-center justify-center rounded-sm text-fg hover:bg-well disabled:opacity-40"
                           aria-label={`Increase ${mission.title || "mission"} length`}
-                          disabled={mission.seconds >= MISSION_LENGTH_MAX}
+                          disabled={locked || mission.seconds >= MISSION_LENGTH_MAX}
                           onClick={() =>
                             onUpdate(mission.id, {
                               seconds: mission.seconds + MISSION_LENGTH_STEP,
@@ -202,7 +246,15 @@ export function MissionsPanel({
                   </div>
                 </div>
                 <span className="w-12 shrink-0 text-right font-display text-xs tabular-nums text-olive">
-                  +{missionXp}
+                  {penalty > 0 ? `-${penalty}` : `+${missionXp}`}
+                </span>
+                {paused ? (
+                  <span className="rounded-sm bg-ember px-2 py-1 font-display text-xs font-semibold uppercase tracking-wider text-fg">
+                    Paused
+                  </span>
+                ) : null}
+                <span className="font-display text-xs uppercase tracking-wider text-muted">
+                  {locked ? "Locked" : "1 edit left"}
                 </span>
                 {running ? (
                   <Button
@@ -210,7 +262,7 @@ export function MissionsPanel({
                     size="compact"
                     variant="secondary"
                     className="shrink-0"
-                    onClick={() => onPause(mission.id)}
+                    onClick={() => setAsk({ kind: "pause", id: mission.id })}
                   >
                     <Pause />
                     Pause
@@ -239,6 +291,35 @@ export function MissionsPanel({
                   {done ? "Completed" : "Complete"}
                 </Button>
               </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                {MISSION_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    aria-label={`Color ${color}`}
+                    disabled={locked}
+                    className={cn(
+                      "size-5 rounded-sm disabled:opacity-40",
+                      color === "red" && "bg-mission-red",
+                      color === "purple" && "bg-mission-purple",
+                      color === "gold" && "bg-mission-gold",
+                      mission.color === color && "shadow-[0_0_0_2px_var(--color-fg)]",
+                    )}
+                    onClick={() => onUpdate(mission.id, { color })}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="font-display text-xs uppercase tracking-wider text-muted hover:text-fg"
+                  onClick={() =>
+                    onUpdate(mission.id, {
+                      restart: mission.restart === "auto" ? "once" : "auto",
+                    })
+                  }
+                >
+                  {mission.restart === "auto" ? "Auto-restart" : "One-and-done"}
+                </button>
+              </div>
             </li>
           );
         })}
@@ -250,6 +331,41 @@ export function MissionsPanel({
           Add mission
         </Button>
       )}
+      {ask && asked ? (
+        <div className="mt-3 rounded-md bg-bg p-3 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-ember)_50%,transparent)]">
+          {ask.kind === "pause" ? (
+            <p className="text-sm leading-snug text-fg">
+              The first 2 minutes paused are free. Then each full minute removes 1 side XP. The loss
+              applies on Complete. Pause anyway?
+            </p>
+          ) : (
+            <div className="space-y-1 text-sm leading-snug text-fg">
+              <p>Delete this locked mission?</p>
+              <p>You lose this mission&apos;s side XP.</p>
+              <p>You lose 5 side XP.</p>
+              <p>Your day streak returns to 0.</p>
+              <p>REZ SICK starts. Earned XP is multiplied by 0.75.</p>
+            </div>
+          )}
+          <div className="mt-2 flex gap-2">
+            <Button
+              type="button"
+              variant="ember"
+              size="compact"
+              onClick={() => {
+                if (ask.kind === "pause") onPause(ask.id);
+                else onBail(ask.id);
+                setAsk(null);
+              }}
+            >
+              {ask.kind === "pause" ? "Pause" : "Delete"}
+            </Button>
+            <Button type="button" variant="ghost" size="compact" onClick={() => setAsk(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -18,10 +18,14 @@ export function CheckInFeed({
   entries,
   onCheckIn,
   className,
+  compact = false,
+  partnerHandle = "",
 }: {
   entries: CheckInEntry[];
   onCheckIn: (kind: CheckInKind) => void;
   className?: string;
+  compact?: boolean;
+  partnerHandle?: string;
 }) {
   const scroller = useRef<HTMLOListElement>(null);
 
@@ -44,6 +48,13 @@ export function CheckInFeed({
           Check in
         </h2>
       </div>
+      {compact ? null : (
+        <p className="mt-1 text-xs leading-snug text-muted">
+          {partnerHandle
+            ? `Messages for ${partnerHandle}. These messages do not give XP.`
+            : "Messages for the person on the challenge with you. These messages do not give XP."}
+        </p>
+      )}
       <div className="mt-3 grid grid-cols-3 gap-2">
         {CHECK_IN_PRESETS.map((preset) => (
           <Button
@@ -61,18 +72,23 @@ export function CheckInFeed({
       <ol
         ref={scroller}
         aria-label="Check-in feed"
-        className="mt-3 h-36 space-y-1 overflow-y-auto"
+        className="mt-2 space-y-1 overflow-hidden"
       >
         {entries.length === 0 ? (
-          <li className="text-sm text-muted">No check-ins yet.</li>
+          <li className="text-sm text-muted">
+            {partnerHandle ? `No message sent to ${partnerHandle}.` : "No partner yet."}
+          </li>
         ) : (
-          entries.map((entry) => (
+          (compact ? entries.slice(-1) : entries.slice(-3)).map((entry) => (
             <li
               key={entry.id}
               className="flex items-baseline justify-between gap-3 rounded-sm bg-well px-3 py-2"
             >
               <span className="font-display text-sm font-semibold uppercase tracking-wider">
                 {checkInLabel(entry.kind)}
+                {entry.to ? (
+                  <span className="ml-2 text-xs tracking-wider text-muted">to {entry.to}</span>
+                ) : null}
               </span>
               <span className="font-display text-xs tabular-nums text-muted">
                 {formatClock(entry.at)}

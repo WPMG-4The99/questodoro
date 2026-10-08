@@ -8,12 +8,21 @@ export const MAX_REWARDS = 8;
 export const MISSION_LENGTH_MIN = 5;
 export const MISSION_LENGTH_MAX = 600;
 export const MISSION_LENGTH_STEP = 5;
+export const PAUSE_GRACE_MS = 2 * 60 * 1000;
+export const BAIL_DOCK_XP = 5;
+
+export const MISSION_COLORS = ["red", "purple", "gold"] as const;
+export type MissionColor = (typeof MISSION_COLORS)[number];
+export type MissionRestart = "once" | "auto";
 
 export type Mission = {
   id: string;
   title: string;
   brief: string;
   seconds: number;
+  editsLeft: number;
+  color: MissionColor;
+  restart: MissionRestart;
 };
 
 export type RewardKind = "level" | "streak" | "missions";
@@ -42,18 +51,27 @@ export const DEFAULT_MISSIONS: Mission[] = [
     title: "Eye drops",
     brief: "Drip and check in.",
     seconds: 30,
+    editsLeft: 1,
+    color: "red",
+    restart: "once",
   },
   {
     id: "m-stretch",
     title: "Stand and stretch",
     brief: "On your feet.",
     seconds: 60,
+    editsLeft: 1,
+    color: "purple",
+    restart: "once",
   },
   {
     id: "m-water",
     title: "Water hit",
     brief: "Drink and check in.",
     seconds: 20,
+    editsLeft: 1,
+    color: "gold",
+    restart: "once",
   },
 ];
 
@@ -99,6 +117,26 @@ export function clampMissionSeconds(seconds: number) {
 /** 1 XP per 5 seconds, bounded to 2–20. Daily side total is capped separately. */
 export function xpForMission(seconds: number) {
   return Math.min(20, Math.max(2, Math.round(clampMissionSeconds(seconds) / 5)));
+}
+
+/** Full minutes paused after the 2-minute grace. Each minute is 1 side XP. */
+export function pausePenaltyXp(pausedMs: number) {
+  const past = Math.max(0, pausedMs - PAUSE_GRACE_MS);
+  return Math.floor(past / 60_000);
+}
+
+export function pausedTotalMs(
+  run: { pausedMs: number; pausedAt: number | null },
+  now: number,
+) {
+  if (run.pausedAt == null) return run.pausedMs;
+  return run.pausedMs + Math.max(0, now - run.pausedAt);
+}
+
+/** REZ SICK multiplies earned XP by 0.75. Round down. */
+export function applyRez(xp: number, rezSick: boolean) {
+  if (!rezSick || xp <= 0) return xp;
+  return Math.floor(xp * 0.75);
 }
 
 export function pickMission(
@@ -172,7 +210,7 @@ export function unlockContext(totalXp: number, streak: number, missionStreak: nu
   };
 }
 
-function asMission(raw: unknown): Mission | null {
+function asMission(raw: unknown, index: number): Mission | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Partial<Mission>;
   const title = typeof row.title === "string" ? row.title.slice(0, 32) : "";
@@ -181,7 +219,12 @@ function asMission(raw: unknown): Mission | null {
   const seconds = clampMissionSeconds(
     typeof row.seconds === "number" && row.seconds > 0 ? row.seconds : 30,
   );
-  return { id, title, brief, seconds };
+  const color: MissionColor = MISSION_COLORS.includes(row.color as MissionColor)
+    ? (row.color as MissionColor)
+    : MISSION_COLORS[index] ?? "red";
+  const restart: MissionRestart = row.restart === "auto" ? "auto" : "once";
+  const editsLeft = row.editsLeft === 0 ? 0 : 1;
+  return { id, title, brief, seconds, editsLeft, color, restart };
 }
 
 function asReward(raw: unknown): Reward | null {
@@ -206,7 +249,9 @@ function asReward(raw: unknown): Reward | null {
 
 export function parseMissions(raw: unknown): Mission[] {
   if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_MISSIONS.map((m) => ({ ...m }));
-  const list = raw.map(asMission).filter((m): m is Mission => m !== null);
+  const list = raw
+    .map((row, index) => asMission(row, index))
+    .filter((m): m is Mission => m !== null);
   return list.slice(0, MAX_MISSIONS);
 }
 

@@ -6,13 +6,12 @@ import {
   Target,
 } from "lucide-react";
 import { CheckInFeed } from "@/components/questodoro/check-in-feed";
-import { NewUserBrief } from "@/components/questodoro/new-user-brief";
 import { DurationStepper } from "@/components/questodoro/duration-stepper";
-import { MissionRunClock } from "@/components/questodoro/mission-run-clock";
 import { MissionsPanel } from "@/components/questodoro/missions-panel";
 import { PhyreMark } from "@/components/questodoro/mark";
 import { RewardsShelf } from "@/components/questodoro/rewards-shelf";
 import { TimerRing } from "@/components/questodoro/timer-ring";
+import { TogetherPanel } from "@/components/questodoro/together-panel";
 import { Button } from "@/components/ui/button";
 import { SIDE_XP_DAILY_CAP } from "@/lib/questodoro/missions";
 import {
@@ -88,6 +87,7 @@ export function QuestodoroBoard() {
   const selectedMissionId = useQuestStore((s) => s.selectedMissionId);
   const missionStreak = useQuestStore((s) => s.missionStreak);
   const sideXpToday = useQuestStore((s) => s.sideXpToday);
+  const rezSick = useQuestStore((s) => s.rezSick);
   const completedIds = useQuestStore((s) => s.completedIds);
   const missionRuns = useQuestStore((s) => s.missionRuns);
   const start = useQuestStore((s) => s.start);
@@ -100,6 +100,7 @@ export function QuestodoroBoard() {
   const addMission = useQuestStore((s) => s.addMission);
   const updateMission = useQuestStore((s) => s.updateMission);
   const removeMission = useQuestStore((s) => s.removeMission);
+  const bailMission = useQuestStore((s) => s.bailMission);
   const moveMission = useQuestStore((s) => s.moveMission);
   const addReward = useQuestStore((s) => s.addReward);
   const updateRewardTitle = useQuestStore((s) => s.updateRewardTitle);
@@ -114,6 +115,7 @@ export function QuestodoroBoard() {
   const clearBanner = useQuestStore((s) => s.clearBanner);
   const checkIns = useQuestStore((s) => s.checkIns);
   const logCheckIn = useQuestStore((s) => s.logCheckIn);
+  const partnerHandle = useQuestStore((s) => s.partnerHandle);
   const todayRollup = useQuestStore((s) => s.todayRollup);
   const yesterday = useQuestStore((s) => s.yesterday);
 
@@ -190,8 +192,8 @@ export function QuestodoroBoard() {
     yesterdayTotal == null ? "text-muted" : delta != null && delta < 0 ? "text-ember" : "text-olive";
 
   return (
-    <main className="min-h-dvh bg-bg text-fg 2xl:h-dvh 2xl:overflow-hidden">
-      <div className="mx-auto flex min-h-dvh w-full max-w-board flex-col gap-5 px-4 py-4 2xl:h-dvh 2xl:gap-6 2xl:px-10 2xl:py-6">
+    <main className="h-dvh overflow-hidden bg-bg text-fg">
+      <div className="mx-auto flex h-full w-full max-w-board flex-col gap-3 overflow-hidden px-4 py-3">
         <header className="flex shrink-0 flex-col gap-4 border-b border-border pb-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
           <div className="stagger-item flex items-center gap-4">
             <PhyreMark className="size-14 shrink-0" />
@@ -202,6 +204,11 @@ export function QuestodoroBoard() {
               <h1 className="font-display text-5xl font-semibold leading-none tracking-display text-fg 2xl:text-6xl">
                 QUESTODORO
               </h1>
+              {rezSick ? (
+                <p className="mt-1 font-display text-sm font-semibold uppercase tracking-wider text-ember">
+                  REZ SICK
+                </p>
+              ) : null}
               <p className="mt-1 text-sm text-muted">
                 Work earns the rank. Missions are on demand. Oorah.
               </p>
@@ -230,8 +237,6 @@ export function QuestodoroBoard() {
             {lastMissionXp > 0 ? ` · Last mission +${lastMissionXp}` : ""}
           </p>
         </div>
-
-        <NewUserBrief />
 
         <section className="stagger-item flex shrink-0 flex-col gap-3 rounded-xl bg-surface px-4 py-3 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)] sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -284,27 +289,24 @@ export function QuestodoroBoard() {
               </p>
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+            <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-2">
               <TimerRing
                 remainingMs={remainingMs}
                 totalMs={totalMs}
                 phase={phase}
                 runState={runState}
+                sideRings={liveRuns.map((run) => {
+                  const mission = missions.find((item) => item.id === run.id);
+                  return {
+                    id: run.id,
+                    title: mission?.title || "Mission",
+                    color: mission?.color ?? "red",
+                    remainingMs: run.remainingMs,
+                    totalMs: run.totalMs,
+                    paused: run.runState === "paused",
+                  };
+                })}
               />
-
-              {liveRuns.length > 0 ? (
-                <div className="flex w-full flex-col gap-2">
-                  {liveRuns.map((run) => (
-                    <MissionRunClock
-                      key={run.id}
-                      mission={missions.find((m) => m.id === run.id) ?? null}
-                      run={run}
-                      onPause={() => pauseMission(run.id)}
-                      onResume={() => startMission(run.id)}
-                    />
-                  ))}
-                </div>
-              ) : null}
 
               <p
                 className={cn(
@@ -386,14 +388,20 @@ export function QuestodoroBoard() {
             onAdd={addMission}
             onUpdate={updateMission}
             onRemove={removeMission}
+            onBail={bailMission}
             onMove={moveMission}
             onStart={startMission}
             onPause={pauseMission}
             onComplete={completeMission}
           />
 
-          <div className="stagger-item flex min-h-0 flex-col gap-5">
-            <CheckInFeed entries={checkIns} onCheckIn={logCheckIn} />
+          <div className="stagger-item flex min-h-0 flex-col gap-3 overflow-hidden">
+            <TogetherPanel />
+            <CheckInFeed
+              entries={checkIns}
+              onCheckIn={logCheckIn}
+              partnerHandle={partnerHandle}
+            />
             <RewardsShelf
               className="min-h-0 flex-1"
               rewards={rewards}

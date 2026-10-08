@@ -16,14 +16,25 @@ import {
   type CheckInKind,
 } from "@/lib/questodoro/check-ins";
 import {
+  emptyTogether,
+  makeInviteCode,
+  parseTogether,
+  type TogetherStatus,
+} from "@/lib/questodoro/together";
+import {
   DEFAULT_MISSIONS,
   DEFAULT_REWARDS,
   MAX_MISSIONS,
   MAX_REWARDS,
   MAX_LIVE_MISSIONS,
+  MISSION_COLORS,
   MISSION_XP,
   SIDE_XP_DAILY_CAP,
+  BAIL_DOCK_XP,
   xpForMission,
+  applyRez,
+  pausePenaltyXp,
+  pausedTotalMs,
   type BreakMission,
   type Mission,
   type Reward,
@@ -95,6 +106,8 @@ export type MissionRun = {
   totalMs: number;
   endsAt: number | null;
   runState: RunState;
+  pausedMs: number;
+  pausedAt: number | null;
 };
 
 export type QuestStats = {
@@ -120,6 +133,11 @@ type PersistShape = QuestStats & {
   rotateIndex: number;
   completedIds: string[];
   checkIns: CheckInEntry[];
+  partnerHandle: string;
+  inviteCode: string;
+  challengeTitle: string;
+  togetherStatus: TogetherStatus;
+  rezSick: boolean;
 };
 
 type QuestState = QuestStats & {
@@ -141,20 +159,33 @@ type QuestState = QuestStats & {
   breakMission: BreakMission | null;
   missionRuns: MissionRun[];
   checkIns: CheckInEntry[];
+  partnerHandle: string;
+  inviteCode: string;
+  challengeTitle: string;
+  togetherStatus: TogetherStatus;
+  rezSick: boolean;
   hydrate: () => void;
   start: () => void;
   pause: () => void;
   reset: () => void;
   checkIn: () => void;
   logCheckIn: (kind: CheckInKind) => void;
+  invitePartner: (handle: string, title: string) => void;
+  markPartnerIn: () => void;
+  leaveTogether: () => void;
+  joinWithCode: (code: string) => void;
   skipMission: () => void;
   selectMission: (id: string) => void;
   startMission: (id: string) => void;
   pauseMission: (id: string) => void;
   completeMission: (id: string) => void;
   addMission: () => void;
-  updateMission: (id: string, patch: Partial<Pick<Mission, "title" | "brief" | "seconds">>) => void;
+  updateMission: (
+    id: string,
+    patch: Partial<Pick<Mission, "title" | "brief" | "seconds" | "color" | "restart">>,
+  ) => void;
   removeMission: (id: string) => void;
+  bailMission: (id: string) => void;
   moveMission: (id: string, dir: -1 | 1) => void;
   addReward: (title: string, rule: RewardRule) => void;
   updateRewardTitle: (id: string, title: string) => void;
@@ -215,6 +246,11 @@ function persistFields(state: PersistShape): PersistShape {
     rotateIndex: state.rotateIndex,
     completedIds: state.completedIds,
     checkIns: state.checkIns,
+    partnerHandle: state.partnerHandle,
+    inviteCode: state.inviteCode,
+    challengeTitle: state.challengeTitle,
+    togetherStatus: state.togetherStatus,
+    rezSick: state.rezSick,
   };
 }
 
@@ -282,6 +318,8 @@ function readPersist(): PersistShape | null {
         ? parsed.completedIds.filter((id): id is string => typeof id === "string")
         : [],
       checkIns: parseCheckIns(parsed.checkIns),
+      ...parseTogether(parsed),
+      rezSick: parsed.rezSick === true,
     };
   } catch {
     return null;
@@ -405,15 +443,43 @@ function statPatch(stats: QuestStats): QuestStats {
   };
 }
 
+function subtractSideXp(stats: QuestStats, amount: number): QuestStats {
+  const cut = Math.max(0, Math.floor(amount));
+  const sideCut = Math.min(stats.sideXpToday, cut);
+  const totalCut = Math.min(stats.totalXp, cut);
+  const todayCut = Math.min(stats.todayXp, cut);
+  const rollSide = Math.min(stats.todayRollup.sideXp, cut);
+  const rollTotal = Math.min(stats.todayRollup.totalXp, cut);
+  return {
+    ...stats,
+    sideXpToday: stats.sideXpToday - sideCut,
+    totalXp: stats.totalXp - totalCut,
+    todayXp: stats.todayXp - todayCut,
+    todayRollup: {
+      ...stats.todayRollup,
+      sideXp: stats.todayRollup.sideXp - rollSide,
+      totalXp: stats.todayRollup.totalXp - rollTotal,
+    },
+  };
+}
+
 function awardMissionComplete(s: QuestState, id: string): Partial<QuestState> {
   const mission = s.missions.find((m) => m.id === id);
-  const missionRuns = dropRun(s.missionRuns, id);
-  if (!mission) return { missionRuns };
-  if (s.completedIds.includes(id)) return { missionRuns };
+  const missionRunsDropped = dropRun(s.missionRuns, id);
+  if (!mission) return { missionRuns: missionRunsDropped };
+  if (mission.restart === "once" && s.completedIds.includes(id)) {
+    return { missionRuns: missionRunsDropped };
+  }
 
+  const run = s.missionRuns.find((item) => item.id === id);
+  const pausedMs = run ? pausedTotalMs(run, Date.now()) : 0;
+  const penalty = pausePenaltyXp(pausedMs);
   const rolled = rollDay(s);
   const room = Math.max(0, SIDE_XP_DAILY_CAP - rolled.sideXpToday);
-  const awarded = Math.min(xpForMission(mission.seconds), room);
+  const net = Math.max(0, xpForMission(mission.seconds) - penalty);
+  const capped = Math.min(net, room);
+  const awarded = applyRez(capped, s.rezSick);
+  const clearRez = s.rezSick && penalty === 0;
   const bonus = awarded > 0 ? applyBonusXp(rolled, awarded) : rolled;
   const stats: QuestStats = {
     ...bonus,
@@ -423,25 +489,42 @@ function awardMissionComplete(s: QuestState, id: string): Partial<QuestState> {
       sideXp: bonus.todayRollup.sideXp + awarded,
     },
   };
+  const completedIds =
+    mission.restart === "once" ? [...s.completedIds, id] : s.completedIds.filter((item) => item !== id);
+  const freshRun: MissionRun = {
+    id,
+    remainingMs: mission.seconds * 1000,
+    totalMs: mission.seconds * 1000,
+    endsAt: Date.now() + mission.seconds * 1000,
+    runState: "running",
+    pausedMs: 0,
+    pausedAt: null,
+  };
+  const missionRuns =
+    mission.restart === "auto" ? replaceRun(s.missionRuns, freshRun) : missionRunsDropped;
   const next = withUnlocks({
     ...s,
     ...stats,
+    rezSick: clearRez ? false : s.rezSick,
     missionStreak: s.missionStreak + 1,
     selectedMissionId: id,
-    completedIds: [...s.completedIds, id],
+    completedIds,
   });
   writePersist(persistFields(next));
+  const loss = penalty > 0 ? ` PAUSE -${penalty}.` : "";
   return {
     ...statPatch(next),
+    rezSick: next.rezSick,
     rewards: next.rewards,
     selectedMissionId: next.selectedMissionId,
     completedIds: next.completedIds,
     missionRuns,
     lastMissionXp: awarded,
-    banner:
-      awarded <= 0
-        ? `MISSION DONE: ${mission.title.toUpperCase()}. SIDE XP CAPPED (${SIDE_XP_DAILY_CAP}/DAY).`
-        : `MISSION COMPLETE: ${mission.title.toUpperCase()}. +${awarded} XP.`,
+    banner: clearRez
+      ? "CLEARED"
+      : awarded <= 0
+        ? `MISSION DONE: ${mission.title.toUpperCase()}.${loss} SIDE XP CAPPED (${SIDE_XP_DAILY_CAP}/DAY).`
+        : `MISSION COMPLETE: ${mission.title.toUpperCase()}. +${awarded} XP.${loss}`,
   };
 }
 
@@ -545,6 +628,8 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   breakMission: null,
   missionRuns: [],
   checkIns: [],
+  ...emptyTogether(),
+  rezSick: false,
 
   hydrate: () => {
     if (get().hydrated) return;
@@ -631,8 +716,52 @@ export const useQuestStore = create<QuestState>((set, get) => ({
 
   logCheckIn: (kind: CheckInKind) => {
     const s = get();
-    const entry: CheckInEntry = { id: newId("c"), kind, at: Date.now() };
+    const entry: CheckInEntry = {
+      id: newId("c"),
+      kind,
+      at: Date.now(),
+      to: s.partnerHandle,
+    };
     set({ checkIns: [...s.checkIns, entry].slice(-MAX_CHECK_INS) });
+    persistNow();
+  },
+
+  invitePartner: (handle: string, title: string) => {
+    const partnerHandle = handle.trim().slice(0, 16);
+    if (partnerHandle.length < 2) return;
+    const challengeTitle = title.trim().slice(0, 32) || "Hold the line";
+    set({
+      partnerHandle,
+      challengeTitle,
+      inviteCode: makeInviteCode(),
+      togetherStatus: "invited",
+    });
+    persistNow();
+  },
+
+  markPartnerIn: () => {
+    const s = get();
+    if (!s.partnerHandle || !s.inviteCode) return;
+    set({ togetherStatus: "together" });
+    persistNow();
+  },
+
+  leaveTogether: () => {
+    set(emptyTogether());
+    persistNow();
+  },
+
+  joinWithCode: (code: string) => {
+    const inviteCode = code.trim().toUpperCase().slice(0, 8);
+    if (inviteCode.length < 4) return;
+    const s = get();
+    const matchesHost = s.inviteCode && s.inviteCode === inviteCode;
+    set({
+      inviteCode,
+      togetherStatus: "together",
+      partnerHandle: matchesHost ? s.partnerHandle : s.partnerHandle,
+      challengeTitle: s.challengeTitle,
+    });
     persistNow();
   },
 
@@ -692,12 +821,22 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       persistNow();
       return;
     }
+    const now = Date.now();
+    const pausedMs =
+      existing?.runState === "paused"
+        ? pausedTotalMs(
+            { pausedMs: existing.pausedMs ?? 0, pausedAt: existing.pausedAt ?? null },
+            now,
+          )
+        : 0;
     const run: MissionRun = {
       id,
       remainingMs: remaining,
       totalMs: existing?.totalMs ?? remaining,
-      endsAt: Date.now() + remaining,
+      endsAt: now + remaining,
       runState: "running",
+      pausedMs,
+      pausedAt: null,
     };
     set({
       selectedMissionId: id,
@@ -718,8 +857,10 @@ export const useQuestStore = create<QuestState>((set, get) => ({
         runState: "paused",
         remainingMs: remaining,
         endsAt: null,
+        pausedMs: existing.pausedMs ?? 0,
+        pausedAt: Date.now(),
       }),
-      banner: "MISSION HELD.",
+      banner: "MISSION PAUSED.",
     });
   },
 
@@ -731,6 +872,9 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       title: "Custom",
       brief: "Your one-liner.",
       seconds: 30,
+      editsLeft: 1,
+      color: MISSION_COLORS.find((item) => !s.missions.some((mission) => mission.color === item)) ?? "red",
+      restart: "once",
     };
     set({ missions: [...s.missions, mission], selectedMissionId: mission.id });
     persistNow();
@@ -740,17 +884,58 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const s = get();
     const missions = s.missions.map((m) => {
       if (m.id !== id) return m;
+      const nextTitle = patch.title !== undefined ? patch.title.slice(0, 32) : m.title;
+      const nextSeconds =
+        patch.seconds === undefined ? m.seconds : clampMissionSeconds(patch.seconds);
+      const nextColor = patch.color ?? m.color;
+      const locks =
+        nextTitle !== m.title || nextSeconds !== m.seconds || nextColor !== m.color;
+      if (locks && m.editsLeft <= 0) return m;
       return {
         ...m,
-        title: patch.title !== undefined ? patch.title.slice(0, 32) : m.title,
+        title: nextTitle,
         brief: patch.brief !== undefined ? patch.brief.slice(0, 80) : m.brief,
-        seconds:
-          patch.seconds === undefined
-            ? m.seconds
-            : clampMissionSeconds(patch.seconds),
+        seconds: nextSeconds,
+        color: nextColor,
+        restart: patch.restart ?? m.restart,
+        editsLeft: locks ? 0 : m.editsLeft,
       };
     });
     set({ missions });
+    persistNow();
+  },
+
+  bailMission: (id) => {
+    const s = get();
+    const mission = s.missions.find((m) => m.id === id);
+    if (!mission || mission.editsLeft > 0) return;
+    const today = localDay();
+    const docked = subtractSideXp(
+      subtractSideXp(rollDay(s), xpForMission(mission.seconds)),
+      BAIL_DOCK_XP,
+    );
+    const missions = s.missions.filter((m) => m.id !== id);
+    const selectedMissionId =
+      s.selectedMissionId === id ? (missions[0]?.id ?? null) : s.selectedMissionId;
+    const next = withUnlocks({
+      ...s,
+      ...docked,
+      streak: 0,
+      lastActiveDay: today,
+      rezSick: true,
+      missions,
+      selectedMissionId,
+      missionRuns: dropRun(s.missionRuns, id),
+    });
+    set({
+      ...statPatch(next),
+      rezSick: true,
+      rewards: next.rewards,
+      missions,
+      selectedMissionId,
+      missionRuns: next.missionRuns,
+      banner: "REZ SICK.",
+    });
     persistNow();
   },
 
@@ -869,7 +1054,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const remaining = Math.max(0, s.endsAt - now);
     if (remaining <= 0) {
       if (s.phase === "work") {
-        const xp = xpForWork(s.workSeconds);
+        const xp = applyRez(xpForWork(s.workSeconds), s.rezSick);
         const stats = applyWorkComplete(s, xp, s.workSeconds);
         set(beginBreakFromWork(s, stats, xp, now));
       } else {

@@ -10,6 +10,8 @@ export type CheckInEntry = {
   id: string;
   kind: CheckInKind;
   at: number;
+  /** Handle the ping was sent to. Empty when no one was on the challenge yet. */
+  to: string;
 };
 
 export const MAX_CHECK_INS = 40;
@@ -30,7 +32,8 @@ export function parseCheckIns(raw: unknown): CheckInEntry[] {
     const at = Number(row.at);
     if (!Number.isFinite(at)) continue;
     const id = typeof row.id === "string" && row.id ? row.id : `c-${list.length}`;
-    list.push({ id, kind: row.kind as CheckInKind, at });
+    const to = typeof row.to === "string" ? row.to.slice(0, 16) : "";
+    list.push({ id, kind: row.kind as CheckInKind, at, to });
   }
   return list.slice(-MAX_CHECK_INS);
 }
