@@ -9,7 +9,9 @@ import {
   presetKey,
   ruleLabel,
   type Reward,
+  type RewardScope,
 } from "@/lib/questodoro/missions";
+import { useQuestStore } from "@/lib/questodoro/store";
 import { cn } from "@/lib/utils";
 
 export function RewardsShelf({
@@ -21,7 +23,7 @@ export function RewardsShelf({
   className,
 }: {
   rewards: Reward[];
-  onAdd: (title: string, rule: ReturnType<typeof parsePreset>) => void;
+  onAdd: (title: string, rule: ReturnType<typeof parsePreset>, scope: RewardScope) => void;
   onRename: (id: string, title: string) => void;
   onRemove: (id: string) => void;
   onClaim: (id: string) => void;
@@ -29,10 +31,13 @@ export function RewardsShelf({
 }) {
   const [title, setTitle] = useState("");
   const [preset, setPreset] = useState(presetKey(REWARD_PRESETS[4]?.rule ?? { kind: "missions", at: 3 }));
+  const [scope, setScope] = useState<RewardScope>("solo");
+  const canAddTogether = useQuestStore((s) => s.togetherRole === "host");
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    onAdd(title, parsePreset(preset));
+    const nextScope = scope === "together" && canAddTogether ? "together" : "solo";
+    onAdd(title, parsePreset(preset), nextScope);
     setTitle("");
   }
 
@@ -51,7 +56,7 @@ export function RewardsShelf({
           </h2>
         </div>
         <p className="mt-1 text-[11px] leading-tight text-muted">
-          Self-bribes. Unlock on level, streak, or check-ins in a row. You stamp CLAIMED. Honor system.
+          Just me unlocks on your record. Together unlocks for both when mission 3 is done.
         </p>
       </div>
 
@@ -90,7 +95,21 @@ export function RewardsShelf({
                     <Trash2 className="size-3.5" />
                   </button>
                 </div>
-                <p className="mt-1 text-xs leading-tight text-muted">{ruleLabel(reward.rule)}</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="min-w-0 text-xs leading-tight text-muted">
+                    {reward.scope === "together"
+                      ? "Unlock when mission 3 is done"
+                      : ruleLabel(reward.rule)}
+                  </p>
+                  <span
+                    className={cn(
+                      "shrink-0 font-display text-[10px] font-semibold uppercase tracking-wider",
+                      reward.scope === "together" ? "text-olive" : "text-muted",
+                    )}
+                  >
+                    {reward.scope === "together" ? "Together" : "Solo"}
+                  </span>
+                </div>
                 {reward.claimed ? (
                   <p className="claimed-stamp mt-0.5 font-display text-[11px] font-semibold uppercase tracking-kicker text-olive">
                     Claimed
@@ -121,12 +140,27 @@ export function RewardsShelf({
           className="h-8 min-h-8 min-w-0 flex-1 text-sm"
           onChange={(event) => setTitle(event.target.value)}
         />
+        <label className="sr-only" htmlFor="reward-scope">
+          Bribe type
+        </label>
+        <select
+          id="reward-scope"
+          value={scope}
+          onChange={(event) => setScope(event.target.value === "together" ? "together" : "solo")}
+          className="h-8 min-h-8 shrink-0 rounded-md bg-well px-2 font-sans text-xs text-fg shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_14%,transparent)] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--color-olive)]"
+        >
+          <option value="solo">Just me</option>
+          <option value="together" disabled={!canAddTogether}>
+            Together
+          </option>
+        </select>
         <label className="sr-only" htmlFor="reward-rule">
           Unlock rule
         </label>
         <select
           id="reward-rule"
           value={preset}
+          disabled={scope === "together"}
           onChange={(event) => setPreset(event.target.value)}
           className="h-8 min-h-8 w-auto max-w-full shrink-0 rounded-md bg-well px-2 font-sans text-sm text-fg shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_14%,transparent)] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--color-olive)]"
         >

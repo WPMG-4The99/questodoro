@@ -1,10 +1,14 @@
 export type TogetherStatus = "solo" | "invited" | "together";
+export type TogetherRole = "host" | "guest" | "";
 
 export type TogetherState = {
   partnerHandle: string;
   inviteCode: string;
   challengeTitle: string;
   togetherStatus: TogetherStatus;
+  togetherRole: TogetherRole;
+  togetherSelfDone: boolean;
+  togetherPartnerDone: boolean;
 };
 
 export function emptyTogether(): TogetherState {
@@ -13,6 +17,9 @@ export function emptyTogether(): TogetherState {
     inviteCode: "",
     challengeTitle: "",
     togetherStatus: "solo",
+    togetherRole: "",
+    togetherSelfDone: false,
+    togetherPartnerDone: false,
   };
 }
 
@@ -35,10 +42,14 @@ export function parseTogether(raw: unknown): TogetherState {
     typeof row.inviteCode === "string" ? row.inviteCode.trim().toUpperCase().slice(0, 8) : "";
   const challengeTitle =
     typeof row.challengeTitle === "string" ? row.challengeTitle.trim().slice(0, 32) : "";
+  const role = row.togetherRole;
   return {
     partnerHandle,
     inviteCode,
     challengeTitle,
     togetherStatus: status === "invited" || status === "together" ? status : "solo",
+    togetherRole: role === "host" || role === "guest" ? role : "",
+    togetherSelfDone: row.togetherSelfDone === true,
+    togetherPartnerDone: row.togetherPartnerDone === true,
   };
 }

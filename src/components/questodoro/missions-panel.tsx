@@ -3,8 +3,10 @@ import { Check, ChevronDown, ChevronUp, Crosshair, Minus, Pause, Play, Plus, Tra
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuestConfig } from "@/lib/questodoro/nona-config";
+import { useQuestStore } from "@/lib/questodoro/store";
 import {
   MAX_MISSIONS,
+  TOGETHER_SLOT,
   MISSION_LENGTH_MAX,
   MISSION_LENGTH_MIN,
   MISSION_LENGTH_STEP,
@@ -89,6 +91,9 @@ export function MissionsPanel({
     (run) => run.runState === "running" || run.runState === "paused",
   ).length;
   const config = useQuestConfig();
+  const togetherStatus = useQuestStore((s) => s.togetherStatus);
+  const togetherSelfDone = useQuestStore((s) => s.togetherSelfDone);
+  const togetherPartnerDone = useQuestStore((s) => s.togetherPartnerDone);
   const sideCapped = sideXpToday >= config.sideXpDailyCap;
   useEffect(() => {
     if (!missionRuns.some((run) => run.runState === "paused")) return;
@@ -133,6 +138,26 @@ export function MissionsPanel({
           const locked = mission.editsLeft <= 0;
           const missionXp = xpForMission(mission.seconds);
           const atLiveCap = !run && liveCount >= config.maxLiveMissions;
+          const togetherSlot = index === TOGETHER_SLOT;
+          const togetherOpen = togetherSlot && togetherStatus === "together";
+          if (togetherSlot && !togetherOpen) {
+            return (
+              <li
+                key={mission.id}
+                className="flex flex-1 flex-col justify-center rounded-md bg-well p-2 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-olive)_55%,transparent)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-xs font-semibold uppercase text-muted">3</span>
+                  <span className="font-display text-[11px] font-semibold uppercase tracking-wider text-olive">
+                    Together
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-fg">Invite a partner to unlock</p>
+              </li>
+            );
+          }
+          const slotLocked = locked || togetherSlot;
+          const waitingPartner = togetherOpen && togetherSelfDone && !togetherPartnerDone;
           return (
             <li
               key={mission.id}
@@ -159,12 +184,17 @@ export function MissionsPanel({
                 >
                   {index + 1}
                 </button>
-                <MissionTitle mission={mission} locked={locked} onUpdate={onUpdate} />
+                <MissionTitle mission={mission} locked={slotLocked} onUpdate={onUpdate} />
+                {togetherSlot ? (
+                  <span className="shrink-0 font-display text-[11px] font-semibold uppercase tracking-wider text-olive">
+                    Together
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-surface hover:text-fg disabled:opacity-30"
                   aria-label="Move mission up"
-                  disabled={index === 0}
+                  disabled={index === 0 || togetherSlot || index + 1 === TOGETHER_SLOT}
                   onClick={() => onMove(mission.id, -1)}
                 >
                   <ChevronUp className="size-4" />
@@ -173,7 +203,7 @@ export function MissionsPanel({
                   type="button"
                   className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-surface hover:text-fg disabled:opacity-30"
                   aria-label="Move mission down"
-                  disabled={index === missions.length - 1}
+                  disabled={index === missions.length - 1 || togetherSlot || index + 1 === TOGETHER_SLOT}
                   onClick={() => onMove(mission.id, 1)}
                 >
                   <ChevronDown className="size-4" />
@@ -182,7 +212,7 @@ export function MissionsPanel({
                   type="button"
                   className="flex size-10 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-surface hover:text-ember disabled:opacity-30"
                   aria-label={`Remove ${mission.title || "mission"}`}
-                  disabled={missions.length <= 1}
+                  disabled={missions.length <= 1 || togetherSlot}
                   onClick={() => (locked ? setAsk({ kind: "bail", id: mission.id }) : onRemove(mission.id))}
                 >
                   <Trash2 className="size-4" />
@@ -193,7 +223,7 @@ export function MissionsPanel({
                 value={mission.brief}
                 maxLength={80}
                 placeholder="One-liner"
-                disabled={locked}
+                disabled={slotLocked}
                 className="mt-1 h-9 min-h-9"
                 onChange={(event) => onUpdate(mission.id, { brief: event.target.value })}
               />
@@ -213,7 +243,7 @@ export function MissionsPanel({
                           type="button"
                           className="flex size-9 items-center justify-center rounded-sm text-fg hover:bg-well disabled:opacity-40"
                           aria-label={`Decrease ${mission.title || "mission"} length`}
-                          disabled={locked || mission.seconds <= MISSION_LENGTH_MIN}
+                          disabled={slotLocked || mission.seconds <= MISSION_LENGTH_MIN}
                           onClick={() =>
                             onUpdate(mission.id, {
                               seconds: mission.seconds - MISSION_LENGTH_STEP,
@@ -229,7 +259,7 @@ export function MissionsPanel({
                           type="button"
                           className="flex size-9 items-center justify-center rounded-sm text-fg hover:bg-well disabled:opacity-40"
                           aria-label={`Increase ${mission.title || "mission"} length`}
-                          disabled={locked || mission.seconds >= MISSION_LENGTH_MAX}
+                          disabled={slotLocked || mission.seconds >= MISSION_LENGTH_MAX}
                           onClick={() =>
                             onUpdate(mission.id, {
                               seconds: mission.seconds + MISSION_LENGTH_STEP,
@@ -254,7 +284,7 @@ export function MissionsPanel({
                   </span>
                 ) : null}
                 <span className="font-display text-xs uppercase tracking-wider text-muted">
-                  {locked ? "Locked" : "1 edit left"}
+                  {togetherSlot ? "Together" : locked ? "Locked" : "1 edit left"}
                 </span>
                 {running ? (
                   <Button
@@ -284,11 +314,11 @@ export function MissionsPanel({
                   size="compact"
                   variant={done ? "secondary" : "ember"}
                   className="shrink-0"
-                  disabled={done}
+                  disabled={done || waitingPartner}
                   onClick={() => onComplete(mission.id)}
                 >
                   <Check />
-                  {done ? "Completed" : "Complete"}
+                  {done ? "Completed" : waitingPartner ? "Waiting" : togetherSlot ? "Mark done" : "Complete"}
                 </Button>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -297,7 +327,7 @@ export function MissionsPanel({
                     key={color}
                     type="button"
                     aria-label={`Color ${color}`}
-                    disabled={locked}
+                    disabled={slotLocked}
                     className={cn(
                       "size-5 rounded-sm disabled:opacity-40",
                       color === "red" && "bg-mission-red",
@@ -310,7 +340,8 @@ export function MissionsPanel({
                 ))}
                 <button
                   type="button"
-                  className="font-display text-xs uppercase tracking-wider text-muted hover:text-fg"
+                  className="font-display text-xs uppercase tracking-wider text-muted hover:text-fg disabled:opacity-40"
+                  disabled={togetherSlot}
                   onClick={() =>
                     onUpdate(mission.id, {
                       restart: mission.restart === "auto" ? "once" : "auto",

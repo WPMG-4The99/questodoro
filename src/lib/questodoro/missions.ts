@@ -33,10 +33,13 @@ export type RewardRule = {
   at: number;
 };
 
+export type RewardScope = "solo" | "together";
+
 export type Reward = {
   id: string;
   title: string;
   rule: RewardRule;
+  scope: RewardScope;
   unlockedAt: string | null;
   claimed: boolean;
 };
@@ -81,6 +84,7 @@ export const DEFAULT_REWARDS: Reward[] = [
     id: "r-coffee",
     title: "Coffee",
     rule: { kind: "missions", at: 3 },
+    scope: "solo",
     unlockedAt: null,
     claimed: false,
   },
@@ -88,6 +92,7 @@ export const DEFAULT_REWARDS: Reward[] = [
     id: "r-game",
     title: "20 min game",
     rule: { kind: "streak", at: 3 },
+    scope: "solo",
     unlockedAt: null,
     claimed: false,
   },
@@ -195,10 +200,14 @@ export function rewardMeets(
 
 export function syncRewardUnlocks(
   rewards: Reward[],
-  ctx: { level: number; streak: number; missionStreak: number; today: string },
+  ctx: { level: number; streak: number; missionStreak: number; today: string; togetherDone?: boolean },
 ): Reward[] {
   return rewards.map((reward) => {
     if (reward.unlockedAt) return reward;
+    if (reward.scope === "together") {
+      if (!ctx.togetherDone) return reward;
+      return { ...reward, unlockedAt: ctx.today };
+    }
     if (!rewardMeets(reward, ctx)) return reward;
     return { ...reward, unlockedAt: ctx.today };
   });
@@ -244,9 +253,33 @@ function asReward(raw: unknown): Reward | null {
     id,
     title,
     rule,
+    scope: row.scope === "together" ? "together" : "solo",
     unlockedAt: typeof row.unlockedAt === "string" ? row.unlockedAt : null,
     claimed: Boolean(row.claimed),
   };
+}
+
+export const TOGETHER_SLOT = 2;
+
+export function withThreeSlots(missions: Mission[]): Mission[] {
+  const next = missions.slice(0, MAX_MISSIONS);
+  while (next.length < MAX_MISSIONS) {
+    const seed = DEFAULT_MISSIONS[next.length];
+    next.push(
+      seed
+        ? { ...seed }
+        : {
+            id: newId("m"),
+            title: "Mission",
+            brief: "",
+            seconds: 30,
+            editsLeft: 1,
+            color: "gold",
+            restart: "once",
+          },
+    );
+  }
+  return next;
 }
 
 export function parseMissions(raw: unknown): Mission[] {
@@ -254,7 +287,7 @@ export function parseMissions(raw: unknown): Mission[] {
   const list = raw
     .map((row, index) => asMission(row, index))
     .filter((m): m is Mission => m !== null);
-  return list.slice(0, MAX_MISSIONS);
+  return withThreeSlots(list);
 }
 
 export function parseRewards(raw: unknown): Reward[] {

@@ -50,8 +50,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
       </div>
       {compact ? null : (
         <p className="mt-1 text-[11px] leading-tight text-muted">
-          You can work alone. Or send one invite. The other person signs up and enters your code.
-          Your check-ins go to that person.
+          Send one invite. The mission text below is mission 3 for both partners.
         </p>
       )}
 
@@ -61,7 +60,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
             With {partnerHandle}
           </p>
           <p className="mt-1 text-sm text-muted">
-            {challengeTitle || "This challenge"}. HOW YA, GRINDING, and PUSH go to them.
+            Mission 3: {challengeTitle || "Hold the line"}.
           </p>
           <Button type="button" variant="ghost" size="compact" className="mt-3" onClick={leaveTogether}>
             Work alone
@@ -97,7 +96,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
             Joined with {inviteCode}
           </p>
           <p className="mt-1 text-sm text-muted">
-            You entered their code at sign-up. Your check-ins go to that person.
+            Mission 3: {challengeTitle || "Waiting for the invite text"}.
           </p>
           <Button type="button" variant="ghost" size="compact" className="mt-3" onClick={leaveTogether}>
             Work alone
@@ -106,13 +105,19 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
       ) : (
         <form className={compact ? "mt-2 flex gap-2" : "mt-3 flex flex-col gap-2"} onSubmit={send}>
           {compact ? null : (
-            <Input
-              aria-label="Challenge name"
-              value={title}
-              maxLength={32}
-              className="h-9 min-h-9"
-              onChange={(event) => setTitle(event.target.value)}
-            />
+            <>
+              <label className="font-display text-[11px] font-semibold uppercase tracking-kicker text-muted" htmlFor="qd-together-mission">
+                Together mission
+              </label>
+              <Input
+                id="qd-together-mission"
+                aria-label="Together mission"
+                value={title}
+                maxLength={32}
+                className="h-9 min-h-9"
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </>
           )}
           <Input
             aria-label="Friend handle"

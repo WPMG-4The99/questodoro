@@ -15,18 +15,28 @@ import {
   type CheckInEntry,
   type CheckInKind,
 } from "@/lib/questodoro/check-ins";
+import { readCallSign } from "@/lib/questodoro/callsign";
 import {
   emptyTogether,
   makeInviteCode,
   parseTogether,
+  type TogetherRole,
   type TogetherStatus,
 } from "@/lib/questodoro/together";
+import {
+  emptyRoom,
+  readRoom,
+  subscribeRoom,
+  writeRoom,
+  type TogetherRoom,
+} from "@/lib/questodoro/room";
 import { getQuestConfig } from "@/lib/questodoro/nona-config";
 import {
   DEFAULT_MISSIONS,
   DEFAULT_REWARDS,
   MAX_MISSIONS,
   MAX_REWARDS,
+  TOGETHER_SLOT,
   MISSION_COLORS,
   MISSION_XP,
   SIDE_XP_DAILY_CAP,
@@ -39,6 +49,7 @@ import {
   type Mission,
   type Reward,
   type RewardRule,
+  type RewardScope,
   newId,
   nextSelectedId,
   parseMissions,
@@ -137,6 +148,9 @@ type PersistShape = QuestStats & {
   inviteCode: string;
   challengeTitle: string;
   togetherStatus: TogetherStatus;
+  togetherRole: TogetherRole;
+  togetherSelfDone: boolean;
+  togetherPartnerDone: boolean;
   rezSick: boolean;
 };
 
@@ -163,6 +177,9 @@ type QuestState = QuestStats & {
   inviteCode: string;
   challengeTitle: string;
   togetherStatus: TogetherStatus;
+  togetherRole: TogetherRole;
+  togetherSelfDone: boolean;
+  togetherPartnerDone: boolean;
   rezSick: boolean;
   hydrate: () => void;
   start: () => void;
@@ -187,7 +204,7 @@ type QuestState = QuestStats & {
   removeMission: (id: string) => void;
   bailMission: (id: string) => void;
   moveMission: (id: string, dir: -1 | 1) => void;
-  addReward: (title: string, rule: RewardRule) => void;
+  addReward: (title: string, rule: RewardRule, scope?: RewardScope) => void;
   updateRewardTitle: (id: string, title: string) => void;
   removeReward: (id: string) => void;
   claimReward: (id: string) => void;
@@ -250,8 +267,26 @@ function persistFields(state: PersistShape): PersistShape {
     inviteCode: state.inviteCode,
     challengeTitle: state.challengeTitle,
     togetherStatus: state.togetherStatus,
+    togetherRole: state.togetherRole,
+    togetherSelfDone: state.togetherSelfDone,
+    togetherPartnerDone: state.togetherPartnerDone,
     rezSick: state.rezSick,
   };
+}
+
+function savedTogether(raw: unknown) {
+  const together = parseTogether(raw);
+  if (together.togetherRole) return together;
+  if (
+    (together.togetherStatus === "invited" || together.togetherStatus === "together") &&
+    together.partnerHandle
+  ) {
+    return { ...together, togetherRole: "host" as const };
+  }
+  if (together.togetherStatus === "together" && together.inviteCode) {
+    return { ...together, togetherRole: "guest" as const };
+  }
+  return together;
 }
 
 function readPersist(): PersistShape | null {
@@ -318,7 +353,7 @@ function readPersist(): PersistShape | null {
         ? parsed.completedIds.filter((id): id is string => typeof id === "string")
         : [],
       checkIns: parseCheckIns(parsed.checkIns),
-      ...parseTogether(parsed),
+      ...savedTogether(parsed),
       rezSick: parsed.rezSick === true,
     };
   } catch {
@@ -405,6 +440,7 @@ function withUnlocks<T extends PersistShape>(state: T): T {
   const rewards = syncRewardUnlocks(state.rewards, {
     ...unlockContext(state.totalXp, state.streak, state.missionStreak),
     today: state.todayDate,
+    togetherDone: state.togetherSelfDone && state.togetherPartnerDone,
   });
   return { ...state, rewards };
 }
@@ -609,6 +645,124 @@ function resolveMission(
   };
 }
 
+let unwatchRoom = () => {};
+
+function myHandle() {
+  return readCallSign()?.handle ?? "";
+}
+
+function bindRoom(code: string) {
+  unwatchRoom();
+  if (!code || typeof window === "undefined") return;
+  unwatchRoom = subscribeRoom(code, () => {
+    const room = readRoom(code);
+    if (room) ingestRoom(room);
+  });
+}
+
+function applyMissionTitle(missions: Mission[], title: string) {
+  if (!title || !missions[TOGETHER_SLOT]) return missions;
+  if (missions[TOGETHER_SLOT].title === title) return missions;
+  const next = missions.slice();
+  next[TOGETHER_SLOT] = { ...next[TOGETHER_SLOT], title };
+  return next;
+}
+
+function ingestRoom(room: TogetherRoom) {
+  const s = useQuestStore.getState();
+  if (s.inviteCode !== room.code || (s.togetherRole !== "host" && s.togetherRole !== "guest")) return;
+  const me = myHandle();
+  const selfDone = s.togetherRole === "host" ? room.hostDone : room.guestDone;
+  const partnerDone = s.togetherRole === "host" ? room.guestDone : room.hostDone;
+  let rewards = s.rewards;
+  if (s.togetherRole === "guest") {
+    for (const bribe of room.bribes) {
+      if (rewards.some((reward) => reward.id === bribe.id)) continue;
+      rewards = [
+        ...rewards,
+        {
+          id: bribe.id,
+          title: bribe.title,
+          rule: { kind: "missions", at: 3 },
+          scope: "together",
+          unlockedAt: null,
+          claimed: false,
+        },
+      ];
+    }
+  }
+  const known = new Set(s.checkIns.map((entry) => entry.id));
+  const extra = room.notes
+    .filter((note) => !known.has(note.id))
+    .map((note) => ({
+      id: note.id,
+      kind: note.kind,
+      at: note.at,
+      from: note.from,
+      to: note.from === me ? s.partnerHandle : me,
+    }));
+  const checkIns = extra.length ? [...s.checkIns, ...extra].slice(-MAX_CHECK_INS) : s.checkIns;
+  const missions = applyMissionTitle(s.missions, room.missionTitle);
+  const partnerHandle =
+    s.togetherRole === "guest" ? room.hostHandle || s.partnerHandle : room.guestHandle || s.partnerHandle;
+  const togetherId = missions[TOGETHER_SLOT]?.id;
+  const base = {
+    togetherSelfDone: selfDone,
+    togetherPartnerDone: partnerDone,
+    challengeTitle: room.missionTitle || s.challengeTitle,
+    partnerHandle,
+    rewards,
+    checkIns,
+    missions,
+  };
+  if (selfDone && partnerDone && togetherId && !s.completedIds.includes(togetherId)) {
+    useQuestStore.setState({
+      ...base,
+      ...awardMissionComplete({ ...s, ...base }, togetherId),
+    });
+  } else {
+    useQuestStore.setState(base);
+  }
+  persistNow();
+}
+
+function markTogetherDone() {
+  const s = useQuestStore.getState();
+  const mission = s.missions[TOGETHER_SLOT];
+  if (!mission || s.togetherStatus !== "together") return;
+  if (s.togetherRole !== "host" && s.togetherRole !== "guest") return;
+  if (s.completedIds.includes(mission.id) || s.togetherSelfDone) return;
+  const room = s.inviteCode ? readRoom(s.inviteCode) : null;
+  const nextRoom = room
+    ? {
+        ...room,
+        hostDone: s.togetherRole === "host" ? true : room.hostDone,
+        guestDone: s.togetherRole === "guest" ? true : room.guestDone,
+      }
+    : null;
+  if (nextRoom) writeRoom(nextRoom);
+  const partnerDone = nextRoom
+    ? s.togetherRole === "host"
+      ? nextRoom.guestDone
+      : nextRoom.hostDone
+    : s.togetherPartnerDone;
+  if (partnerDone) {
+    useQuestStore.setState(
+      awardMissionComplete(
+        { ...s, togetherSelfDone: true, togetherPartnerDone: true },
+        mission.id,
+      ),
+    );
+  } else {
+    useQuestStore.setState({
+      togetherSelfDone: true,
+      togetherPartnerDone: partnerDone,
+      banner: "YOU MARKED THE TOGETHER MISSION. WAIT FOR YOUR PARTNER.",
+    });
+  }
+  persistNow();
+}
+
 export const useQuestStore = create<QuestState>((set, get) => ({
   ...defaultStats(),
   hydrated: false,
@@ -652,6 +806,11 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       hydrated: true,
     });
     persistNow();
+    if (saved.inviteCode) {
+      bindRoom(saved.inviteCode);
+      const room = readRoom(saved.inviteCode);
+      if (room) ingestRoom(room);
+    }
   },
 
   start: () => {
@@ -717,13 +876,22 @@ export const useQuestStore = create<QuestState>((set, get) => ({
 
   logCheckIn: (kind: CheckInKind) => {
     const s = get();
+    const from = myHandle();
     const entry: CheckInEntry = {
       id: newId("c"),
       kind,
       at: Date.now(),
       to: s.partnerHandle,
+      from,
     };
     set({ checkIns: [...s.checkIns, entry].slice(-MAX_CHECK_INS) });
+    const room = s.inviteCode ? readRoom(s.inviteCode) : null;
+    if (room && from) {
+      writeRoom({
+        ...room,
+        notes: [...room.notes, { id: entry.id, kind, from, at: entry.at }].slice(-MAX_CHECK_INS),
+      });
+    }
     persistNow();
   },
 
@@ -731,12 +899,23 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const partnerHandle = handle.trim().slice(0, 16);
     if (partnerHandle.length < 2) return;
     const challengeTitle = title.trim().slice(0, 32) || "Hold the line";
+    const inviteCode = makeInviteCode();
+    const missions = applyMissionTitle(get().missions, challengeTitle);
     set({
       partnerHandle,
       challengeTitle,
-      inviteCode: makeInviteCode(),
+      inviteCode,
       togetherStatus: "invited",
+      togetherRole: "host",
+      togetherSelfDone: false,
+      togetherPartnerDone: false,
+      missions,
     });
+    writeRoom({
+      ...emptyRoom(inviteCode, myHandle(), challengeTitle),
+      guestHandle: partnerHandle,
+    });
+    bindRoom(inviteCode);
     persistNow();
   },
 
@@ -748,6 +927,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   },
 
   leaveTogether: () => {
+    unwatchRoom();
     set(emptyTogether());
     persistNow();
   },
@@ -756,13 +936,25 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const inviteCode = code.trim().toUpperCase().slice(0, 8);
     if (inviteCode.length < 4) return;
     const s = get();
-    const matchesHost = s.inviteCode && s.inviteCode === inviteCode;
+    const room = readRoom(inviteCode);
+    const me = myHandle();
+    if (room && me && room.guestHandle !== me) {
+      writeRoom({ ...room, guestHandle: me });
+    }
+    const challengeTitle = room?.missionTitle || s.challengeTitle;
+    const missions = applyMissionTitle(s.missions, challengeTitle);
     set({
       inviteCode,
       togetherStatus: "together",
-      partnerHandle: matchesHost ? s.partnerHandle : s.partnerHandle,
-      challengeTitle: s.challengeTitle,
+      togetherRole: room ? "guest" : s.togetherRole || "guest",
+      partnerHandle: room?.hostHandle || s.partnerHandle,
+      challengeTitle,
+      missions,
+      togetherSelfDone: room ? room.guestDone : false,
+      togetherPartnerDone: room ? room.hostDone : false,
     });
+    bindRoom(inviteCode);
+    if (room) ingestRoom(readRoom(inviteCode) ?? room);
     persistNow();
   },
 
@@ -796,6 +988,10 @@ export const useQuestStore = create<QuestState>((set, get) => ({
 
   completeMission: (id: string) => {
     const s = get();
+    if (s.missions[TOGETHER_SLOT]?.id === id) {
+      markTogetherDone();
+      return;
+    }
     set(awardMissionComplete(s, id));
     persistNow();
   },
@@ -804,6 +1000,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const s = get();
     const mission = s.missions.find((m) => m.id === id);
     if (!mission) return;
+    if (s.missions[TOGETHER_SLOT]?.id === id && s.togetherStatus !== "together") return;
     const existing = s.missionRuns.find((run) => run.id === id);
     if (existing?.runState === "running") return;
     const liveCount = s.missionRuns.filter(
@@ -884,6 +1081,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
 
   updateMission: (id, patch) => {
     const s = get();
+    if (s.missions[TOGETHER_SLOT]?.id === id) return;
     const missions = s.missions.map((m) => {
       if (m.id !== id) return m;
       const nextTitle = patch.title !== undefined ? patch.title.slice(0, 32) : m.title;
@@ -943,6 +1141,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
 
   removeMission: (id) => {
     const s = get();
+    if (s.missions[TOGETHER_SLOT]?.id === id) return;
     const missions = s.missions.filter((m) => m.id !== id);
     const selectedMissionId =
       s.selectedMissionId === id ? (missions[0]?.id ?? null) : s.selectedMissionId;
@@ -966,6 +1165,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const idx = s.missions.findIndex((m) => m.id === id);
     const next = idx + dir;
     if (idx < 0 || next < 0 || next >= s.missions.length) return;
+    if (idx === TOGETHER_SLOT || next === TOGETHER_SLOT) return;
     const missions = s.missions.slice();
     const [row] = missions.splice(idx, 1);
     missions.splice(next, 0, row);
@@ -973,18 +1173,29 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     persistNow();
   },
 
-  addReward: (title, rule) => {
+  addReward: (title, rule, scope: RewardScope = "solo") => {
     const s = get();
     if (s.rewards.length >= MAX_REWARDS) return;
+    if (scope === "together" && s.togetherRole !== "host") return;
     const trimmed = title.trim().slice(0, 32);
     if (trimmed.length < 2) return;
     const reward: Reward = {
       id: newId("r"),
       title: trimmed,
       rule,
+      scope,
       unlockedAt: null,
       claimed: false,
     };
+    if (scope === "together" && s.inviteCode) {
+      const room = readRoom(s.inviteCode);
+      if (room) {
+        writeRoom({
+          ...room,
+          bribes: [...room.bribes, { id: reward.id, title: reward.title }].slice(0, MAX_REWARDS),
+        });
+      }
+    }
     const rewards = syncRewardUnlocks([...s.rewards, reward], {
       ...unlockContext(s.totalXp, s.streak, s.missionStreak),
       today: s.todayDate,
@@ -1095,6 +1306,14 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     });
     if (changed) set({ missionRuns });
     for (const id of expired) {
+      const current = get();
+      if (current.missions[TOGETHER_SLOT]?.id === id) {
+        set({
+          missionRuns: dropRun(current.missionRuns, id),
+          banner: "TOGETHER MISSION ENDED. MARK IT DONE.",
+        });
+        continue;
+      }
       set(awardMissionComplete(get(), id));
     }
   },
@@ -1120,6 +1339,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const rewards = syncRewardUnlocks(s.rewards, {
       ...unlockContext(rolled.totalXp, rolled.streak, rolled.missionStreak),
       today: rolled.todayDate,
+      togetherDone: s.togetherSelfDone && s.togetherPartnerDone,
     });
     set({
       ...statPatch(rolled),

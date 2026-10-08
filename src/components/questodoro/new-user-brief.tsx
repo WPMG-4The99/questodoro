@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 const card =
   "flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-surface px-4 py-3 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]";
 
-const copy = "mt-2 space-y-1 text-base leading-snug text-fg/90";
+const copy = "mt-2 space-y-0.5 text-sm leading-tight text-fg/90";
 
 const rules = [
   "A finished work block gives 4 XP for each minute.",
@@ -15,9 +15,16 @@ const rules = [
   "A day streak needs one finished work block on that day.",
   "The high score is your best XP in one day.",
   "You can work alone.",
-  "Or you can work with one friend or one family member.",
-  "HOW YA, GRINDING, and PUSH are messages to that person.",
+  "Or you can work with one partner.",
+  "How you doing?, Rough patch, need a push, and Almost there! are messages.",
   "The messages do not give XP.",
+  "Mission 1 and mission 2 are yours.",
+  "Mission 3 is the Together mission. The inviter writes it.",
+  "Both partners must mark mission 3 done.",
+  "With no partner, mission 3 says Invite a partner to unlock.",
+  "A Just me bribe unlocks on your level, streak, or check-ins.",
+  "A Together bribe unlocks for both when mission 3 is done.",
+  "Only the inviter can add a Together bribe.",
   "Pause a mission. The first 2 minutes are free.",
   "After that, each full minute removes 1 side XP on Complete.",
   "Side XP does not go below 0.",
@@ -29,13 +36,15 @@ const rules = [
 const steps = [
   "Start the work clock. Work until the block ends.",
   "Rest when the break starts. Then start the next block.",
-  "Write up to three missions.",
-  "Start a mission when you are ready.",
+  "Write mission 1 and mission 2.",
+  "Mission 3 unlocks when a partner joins.",
+  "The inviter writes mission 3 in Together.",
   "The mission clock is separate from the work clock.",
   "Send one invite code.",
   "The other person enters the code at sign-up.",
-  "Select HOW YA, GRINDING, or PUSH.",
+  "Select How you doing?, Rough patch, need a push, or Almost there!.",
   "The other person sees the message.",
+  "A reply to How you doing? can be Doing all right.",
   "Select Pause on a mission. Confirm the pause.",
   "Select Resume. Resume does not ask again.",
   "Select Complete. The pause loss applies then.",
@@ -110,15 +119,17 @@ const judgeGroups = [
     title: "Together",
     steps: [
       "Enter a friend handle.",
+      "Write the Together mission.",
       "Select Send invite.",
       "Read the invite code.",
-      "Select HOW YA, GRINDING, or PUSH.",
+      "Select How you doing?.",
     ],
   },
   {
     title: "Bribe shelf",
     steps: [
-      "Read the bribe shelf.",
+      "Read the Solo or Together badge.",
+      "Add a Just me bribe or a Together bribe.",
       "Select Claim if it is open.",
     ],
   },
