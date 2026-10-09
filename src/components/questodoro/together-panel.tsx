@@ -36,6 +36,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
 
   return (
     <section
+      id="qd-together"
       className={cn(
         "flex shrink-0 flex-col rounded-xl bg-surface p-4 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-fg)_10%,transparent)]",
         compact && "bg-transparent p-0 shadow-none",
@@ -138,6 +139,7 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
             </>
           )}
           <Input
+            id="qd-friend-handle"
             aria-label="Friend handle"
             placeholder="Their handle"
             value={handle}

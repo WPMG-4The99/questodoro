@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Crosshair, Minus, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Crosshair, Lock, Minus, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuestConfig } from "@/lib/questodoro/nona-config";
@@ -97,6 +97,7 @@ export function MissionsPanel({
   const togetherPartnerDone = useQuestStore((s) => s.togetherPartnerDone);
   const demoMode = useQuestStore((s) => s.demoMode);
   const demoPartnerStarted = useQuestStore((s) => s.demoPartnerStarted);
+  const startJudgeDemo = useQuestStore((s) => s.startJudgeDemo);
   const sideCapped = sideXpToday >= config.sideXpDailyCap;
   useEffect(() => {
     if (!missionRuns.some((run) => run.runState === "paused")) return;
@@ -147,15 +148,47 @@ export function MissionsPanel({
             return (
               <li
                 key={mission.id}
-                className="flex flex-1 flex-col justify-center rounded-md bg-well p-2 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-olive)_55%,transparent)]"
+                className="flex flex-1 flex-col rounded-md bg-well p-2 outline outline-1 -outline-offset-1 outline-dashed outline-olive/55"
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <span className="font-display text-xs font-semibold uppercase text-muted">3</span>
-                  <span className="font-display text-[11px] font-semibold uppercase tracking-wider text-olive">
-                    Together
-                  </span>
+                  <Lock className="size-4 shrink-0 text-olive" aria-hidden="true" />
+                  <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-fg">
+                    Together mission — locked
+                  </h3>
                 </div>
-                <p className="mt-2 text-sm text-fg">Invite a partner to unlock</p>
+                <p className="mt-2 flex-1 text-sm leading-snug text-fg/90">
+                  Squad up. Pair with a battle buddy and this slot becomes a shared mission you both have to finish.
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  <Button
+                    type="button"
+                    size="compact"
+                    className="h-auto min-h-11 whitespace-normal px-1.5 text-center text-[11px] leading-tight"
+                    onClick={() => {
+                      const panel = document.getElementById("qd-together");
+                      panel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      const field =
+                        document.getElementById("qd-friend-handle") ??
+                        document.getElementById("qd-together-mission");
+                      if (field instanceof HTMLElement) field.focus();
+                    }}
+                  >
+                    Invite a partner
+                  </Button>
+                  <Button
+                    type="button"
+                    size="compact"
+                    variant="secondary"
+                    className="h-auto min-h-11 whitespace-normal px-1.5 text-center text-[11px] leading-tight"
+                    onClick={startJudgeDemo}
+                  >
+                    Try together demo
+                  </Button>
+                </div>
+                <p className="mt-2 text-[11px] leading-tight text-muted">
+                  Unlocks a Together bribe when you both complete it.
+                </p>
               </li>
             );
           }
