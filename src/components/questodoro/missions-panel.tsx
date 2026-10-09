@@ -3,7 +3,8 @@ import { Check, ChevronDown, ChevronUp, Crosshair, Minus, Pause, Play, Plus, Tra
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuestConfig } from "@/lib/questodoro/nona-config";
-import { useQuestStore } from "@/lib/questodoro/store";
+import { DemoTag } from "@/components/questodoro/demo-tag";
+import { DEMO_PARTNER, useQuestStore } from "@/lib/questodoro/store";
 import {
   MAX_MISSIONS,
   TOGETHER_SLOT,
@@ -94,6 +95,8 @@ export function MissionsPanel({
   const togetherStatus = useQuestStore((s) => s.togetherStatus);
   const togetherSelfDone = useQuestStore((s) => s.togetherSelfDone);
   const togetherPartnerDone = useQuestStore((s) => s.togetherPartnerDone);
+  const demoMode = useQuestStore((s) => s.demoMode);
+  const demoPartnerStarted = useQuestStore((s) => s.demoPartnerStarted);
   const sideCapped = sideXpToday >= config.sideXpDailyCap;
   useEffect(() => {
     if (!missionRuns.some((run) => run.runState === "paused")) return;
@@ -188,6 +191,12 @@ export function MissionsPanel({
                 {togetherSlot ? (
                   <span className="shrink-0 font-display text-[11px] font-semibold uppercase tracking-wider text-olive">
                     Together
+                  </span>
+                ) : null}
+                {togetherOpen && demoMode && demoPartnerStarted ? (
+                  <span className="shrink-0 text-[11px] text-fg">
+                    {DEMO_PARTNER} started
+                    <DemoTag />
                   </span>
                 ) : null}
                 <button

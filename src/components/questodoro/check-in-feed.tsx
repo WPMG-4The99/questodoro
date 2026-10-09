@@ -1,7 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DemoTag } from "@/components/questodoro/demo-tag";
 import { readCallSign } from "@/lib/questodoro/callsign";
+import { DEMO_PARTNER } from "@/lib/questodoro/store";
 import {
   CHECK_IN_PRESETS,
   CHECK_IN_REPLIES,
@@ -67,6 +69,7 @@ export function CheckInFeed({
             : partnerHandle
               ? `Messages for ${partnerHandle}. These messages do not give XP.`
               : "Messages for the person on the challenge with you. These messages do not give XP."}
+          {partnerHandle === DEMO_PARTNER ? <DemoTag /> : null}
         </p>
       )}
       <div className="mt-2 grid grid-cols-3 items-stretch gap-1.5">
@@ -101,9 +104,15 @@ export function CheckInFeed({
               <span className="min-w-0 font-display text-sm font-semibold normal-case leading-tight">
                 {checkInLabel(entry.kind)}
                 {entry.from && entry.from !== me ? (
-                  <span className="ml-2 text-xs text-muted">from {entry.from}</span>
+                  <span className="ml-2 text-xs text-muted">
+                    from {entry.from}
+                    {entry.from === DEMO_PARTNER ? <DemoTag /> : null}
+                  </span>
                 ) : entry.to ? (
-                  <span className="ml-2 text-xs text-muted">to {entry.to}</span>
+                  <span className="ml-2 text-xs text-muted">
+                    to {entry.to}
+                    {entry.to === DEMO_PARTNER ? <DemoTag /> : null}
+                  </span>
                 ) : null}
               </span>
               <span className="font-display text-xs tabular-nums text-muted">

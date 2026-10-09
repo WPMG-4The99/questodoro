@@ -136,7 +136,13 @@ const judgeGroups = [
   },
 ];
 
-export function NewUserBrief({ onGoToHandle }: { onGoToHandle: () => void }) {
+export function NewUserBrief({
+  onGoToHandle,
+  onTryDemo,
+}: {
+  onGoToHandle: () => void;
+  onTryDemo: () => void;
+}) {
   return (
     <section
       aria-label="New user check-in"
@@ -204,6 +210,9 @@ export function NewUserBrief({ onGoToHandle }: { onGoToHandle: () => void }) {
         <p className="mt-1 shrink-0 text-sm leading-snug text-muted min-[1440px]:text-base">
           Do these steps on the full page. Then select Go to the handle.
         </p>
+        <Button type="button" variant="secondary" className="mt-1 shrink-0" onClick={onTryDemo}>
+          Try together demo
+        </Button>
         <div className="mt-1.5 flex shrink-0 flex-col gap-1">
           {judgeGroups.map((group) => (
             <section key={group.title} className="rounded-md bg-well px-2.5 py-1">

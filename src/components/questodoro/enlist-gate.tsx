@@ -30,6 +30,15 @@ export function EnlistGate({ onEnter }: { onEnter: () => void }) {
     document.getElementById("qd-handle")?.focus();
   }
 
+  function tryDemo() {
+    const nextHandle = handleOk(handle) ? handle.trim() : "Judge";
+    const nextPin = pinOk(pin) ? pin : "0000";
+    writeCallSign({ handle: nextHandle, pin: nextPin });
+    hydrate();
+    useQuestStore.getState().startJudgeDemo();
+    onEnter();
+  }
+
   const ready = handleOk(handle) && pinOk(pin);
 
   return (
@@ -105,7 +114,7 @@ export function EnlistGate({ onEnter }: { onEnter: () => void }) {
             </Button>
           </form>
         </header>
-        <NewUserBrief onGoToHandle={goToHandle} />
+        <NewUserBrief onGoToHandle={goToHandle} onTryDemo={tryDemo} />
       </div>
     </main>
   );

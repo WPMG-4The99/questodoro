@@ -152,6 +152,8 @@ type PersistShape = QuestStats & {
   togetherRole: TogetherRole;
   togetherSelfDone: boolean;
   togetherPartnerDone: boolean;
+  demoMode: boolean;
+  demoPartnerStarted: boolean;
   rezSick: boolean;
 };
 
@@ -181,8 +183,12 @@ type QuestState = QuestStats & {
   togetherRole: TogetherRole;
   togetherSelfDone: boolean;
   togetherPartnerDone: boolean;
+  demoMode: boolean;
+  demoPartnerStarted: boolean;
   rezSick: boolean;
   hydrate: () => void;
+  startJudgeDemo: () => void;
+  endJudgeDemo: () => void;
   start: () => void;
   pause: () => void;
   reset: () => void;
@@ -271,6 +277,8 @@ function persistFields(state: PersistShape): PersistShape {
     togetherRole: state.togetherRole,
     togetherSelfDone: state.togetherSelfDone,
     togetherPartnerDone: state.togetherPartnerDone,
+    demoMode: state.demoMode,
+    demoPartnerStarted: state.demoPartnerStarted,
     rezSick: state.rezSick,
   };
 }
@@ -362,6 +370,8 @@ function readPersist(): PersistShape | null {
         : [],
       checkIns: parseCheckIns(parsed.checkIns),
       ...savedTogether(parsed),
+      demoMode: parsed.demoMode === true,
+      demoPartnerStarted: parsed.demoPartnerStarted === true,
       rezSick: parsed.rezSick === true,
     };
   } catch {
@@ -456,6 +466,76 @@ function withUnlocks<T extends PersistShape>(state: T): T {
 function persistNow() {
   const s = useQuestStore.getState();
   writePersist(persistFields(s));
+}
+
+export const DEMO_PARTNER = "DemoBuddy";
+const DEMO_MISSION_TITLE = "Hold the line";
+const DEMO_BRIBE_ID = "r-demo-buddy";
+const DEMO_START_MS = 5000;
+const DEMO_REPLY_MS = 3000;
+const DEMO_DONE_MS = 10000;
+
+let demoStartTimer = 0;
+let demoReplyTimer = 0;
+let demoDoneTimer = 0;
+
+function clearDemoTimers() {
+  clearTimeout(demoStartTimer);
+  clearTimeout(demoReplyTimer);
+  clearTimeout(demoDoneTimer);
+  demoStartTimer = 0;
+  demoReplyTimer = 0;
+  demoDoneTimer = 0;
+}
+
+function armDemoStart() {
+  clearTimeout(demoStartTimer);
+  useQuestStore.setState({ demoPartnerStarted: false });
+  demoStartTimer = window.setTimeout(() => {
+    const s = useQuestStore.getState();
+    if (!s.demoMode) return;
+    useQuestStore.setState({ demoPartnerStarted: true, banner: "DEMOBUDDY STARTED." });
+    persistNow();
+  }, DEMO_START_MS);
+}
+
+function armDemoReply() {
+  clearTimeout(demoReplyTimer);
+  demoReplyTimer = window.setTimeout(() => {
+    const s = useQuestStore.getState();
+    if (!s.demoMode) return;
+    const entry: CheckInEntry = {
+      id: newId("c"),
+      kind: "all-right",
+      at: Date.now(),
+      to: myHandle(),
+      from: DEMO_PARTNER,
+    };
+    useQuestStore.setState({
+      checkIns: [...s.checkIns, entry].slice(-MAX_CHECK_INS),
+      banner: "DEMOBUDDY: DOING ALL RIGHT.",
+    });
+    persistNow();
+  }, DEMO_REPLY_MS);
+}
+
+function armDemoPartnerDone() {
+  clearTimeout(demoDoneTimer);
+  demoDoneTimer = window.setTimeout(() => {
+    const s = useQuestStore.getState();
+    const mission = s.missions[TOGETHER_SLOT];
+    if (!s.demoMode || !s.togetherSelfDone || !mission) return;
+    useQuestStore.setState({
+      ...awardMissionComplete(
+        { ...s, togetherSelfDone: true, togetherPartnerDone: true },
+        mission.id,
+      ),
+      togetherSelfDone: true,
+      togetherPartnerDone: true,
+      banner: "DEMOBUDDY MARKED MISSION 3 DONE.",
+    });
+    persistNow();
+  }, DEMO_DONE_MS);
 }
 
 function dropRun(runs: MissionRun[], id: string) {
@@ -756,7 +836,7 @@ function markTogetherDone() {
         guestDone: s.togetherRole === "guest" ? true : room.guestDone,
       }
     : null;
-  if (nextRoom) writeRoom(nextRoom);
+  if (nextRoom && !s.demoMode) writeRoom(nextRoom);
   const partnerDone = nextRoom
     ? s.togetherRole === "host"
       ? nextRoom.guestDone
@@ -776,6 +856,7 @@ function markTogetherDone() {
       banner: "YOU MARKED THE TOGETHER MISSION. WAIT FOR YOUR PARTNER.",
     });
   }
+  if (s.demoMode) armDemoPartnerDone();
   persistNow();
 }
 
@@ -800,6 +881,8 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   missionRuns: [],
   checkIns: [],
   ...emptyTogether(),
+  demoMode: false,
+  demoPartnerStarted: false,
   rezSick: false,
 
   hydrate: () => {
@@ -822,7 +905,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       hydrated: true,
     });
     persistNow();
-    if (saved.inviteCode) {
+    if (saved.inviteCode && !saved.demoMode) {
       bindRoom(saved.inviteCode);
       const room = readRoom(saved.inviteCode);
       if (room) ingestRoom(room);
@@ -901,13 +984,83 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       from,
     };
     set({ checkIns: [...s.checkIns, entry].slice(-MAX_CHECK_INS) });
-    const room = s.inviteCode ? readRoom(s.inviteCode) : null;
+    const room = s.inviteCode && !s.demoMode ? readRoom(s.inviteCode) : null;
     if (room && from) {
       writeRoom({
         ...room,
         notes: [...room.notes, { id: entry.id, kind, from, at: entry.at }].slice(-MAX_CHECK_INS),
       });
     }
+    if (s.demoMode && kind === "how-ya") armDemoReply();
+    persistNow();
+  },
+
+  startJudgeDemo: () => {
+    const s = get();
+    const realPartner =
+      Boolean(s.inviteCode) || (Boolean(s.partnerHandle) && s.partnerHandle !== DEMO_PARTNER);
+    if (realPartner || (s.togetherStatus !== "solo" && !s.demoMode)) {
+      set({ banner: "A REAL PARTNER IS SET. END THAT PAIR FIRST." });
+      return;
+    }
+    clearDemoTimers();
+    const missions = applyMissionTitle(s.missions, DEMO_MISSION_TITLE);
+    const rewards = s.rewards.some((reward) => reward.id === DEMO_BRIBE_ID)
+      ? s.rewards
+      : [
+          ...s.rewards,
+          {
+            id: DEMO_BRIBE_ID,
+            title: "Demo coffee",
+            rule: { kind: "missions" as const, at: 3 },
+            scope: "together" as const,
+            unlockedAt: null,
+            claimed: false,
+          },
+        ].slice(0, MAX_REWARDS);
+    set({
+      demoMode: true,
+      demoPartnerStarted: false,
+      partnerHandle: DEMO_PARTNER,
+      inviteCode: "",
+      challengeTitle: DEMO_MISSION_TITLE,
+      togetherStatus: "together",
+      togetherRole: "host",
+      togetherSelfDone: false,
+      togetherPartnerDone: false,
+      missions,
+      rewards,
+      banner: "DEMO PAIRED WITH DEMOBUDDY.",
+    });
+    persistNow();
+  },
+
+  endJudgeDemo: () => {
+    const s = get();
+    if (!s.demoMode) return;
+    clearDemoTimers();
+    const missions = s.missions.slice();
+    const slot = missions[TOGETHER_SLOT];
+    const seed = DEFAULT_MISSIONS[TOGETHER_SLOT];
+    if (slot && seed) {
+      missions[TOGETHER_SLOT] = { ...slot, title: seed.title, brief: seed.brief };
+    }
+    const togetherId = slot?.id;
+    set({
+      ...emptyTogether(),
+      demoMode: false,
+      demoPartnerStarted: false,
+      missions,
+      rewards: s.rewards.filter((reward) => reward.id !== DEMO_BRIBE_ID),
+      checkIns: s.checkIns.filter(
+        (entry) => entry.from !== DEMO_PARTNER && entry.to !== DEMO_PARTNER,
+      ),
+      completedIds: togetherId
+        ? s.completedIds.filter((id) => id !== togetherId)
+        : s.completedIds,
+      missionRuns: togetherId ? dropRun(s.missionRuns, togetherId) : s.missionRuns,
+      banner: "SOLO.",
+    });
     persistNow();
   },
 
@@ -943,6 +1096,10 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   },
 
   leaveTogether: () => {
+    if (get().demoMode) {
+      get().endJudgeDemo();
+      return;
+    }
     unwatchRoom();
     set(emptyTogether());
     persistNow();
@@ -1059,6 +1216,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       completedIds: s.completedIds.filter((item) => item !== id),
       banner: `SIDE MISSION LIVE: ${mission.title.toUpperCase()}.`,
     });
+    if (get().demoMode && s.missions[TOGETHER_SLOT]?.id === id) armDemoStart();
   },
 
   pauseMission: (id: string) => {
@@ -1203,7 +1361,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
       unlockedAt: null,
       claimed: false,
     };
-    if (scope === "together" && s.inviteCode) {
+    if (scope === "together" && s.inviteCode && !s.demoMode) {
       const room = readRoom(s.inviteCode);
       if (room) {
         writeRoom({

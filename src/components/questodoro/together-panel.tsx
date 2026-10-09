@@ -2,8 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DemoTag } from "@/components/questodoro/demo-tag";
 import { useQuestConfig } from "@/lib/questodoro/nona-config";
-import { useQuestStore } from "@/lib/questodoro/store";
+import { DEMO_PARTNER, useQuestStore } from "@/lib/questodoro/store";
 import { cn } from "@/lib/utils";
 
 export function TogetherPanel({ className, compact = false }: { className?: string; compact?: boolean }) {
@@ -16,6 +17,10 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
   const invitePartner = useQuestStore((s) => s.invitePartner);
   const markPartnerIn = useQuestStore((s) => s.markPartnerIn);
   const leaveTogether = useQuestStore((s) => s.leaveTogether);
+  const demoMode = useQuestStore((s) => s.demoMode);
+  const demoPartnerStarted = useQuestStore((s) => s.demoPartnerStarted);
+  const startJudgeDemo = useQuestStore((s) => s.startJudgeDemo);
+  const endJudgeDemo = useQuestStore((s) => s.endJudgeDemo);
   const [handle, setHandle] = useState("");
   const [title, setTitle] = useState("Hold the line");
 
@@ -58,13 +63,26 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
         <div className="mt-3">
           <p className="font-display text-lg font-semibold uppercase tracking-wider text-fg">
             With {partnerHandle}
+            {partnerHandle === DEMO_PARTNER ? <DemoTag /> : null}
           </p>
           <p className="mt-1 text-sm text-muted">
             Mission 3: {challengeTitle || "Hold the line"}.
           </p>
-          <Button type="button" variant="ghost" size="compact" className="mt-3" onClick={leaveTogether}>
-            Work alone
-          </Button>
+          {demoMode && demoPartnerStarted ? (
+            <p className="mt-1 text-sm text-fg">
+              {DEMO_PARTNER} started.
+              <DemoTag />
+            </p>
+          ) : null}
+          {demoMode ? (
+            <Button type="button" variant="ghost" size="compact" className="mt-3" onClick={endJudgeDemo}>
+              End demo
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" size="compact" className="mt-3" onClick={leaveTogether}>
+              Work alone
+            </Button>
+          )}
         </div>
       ) : waiting ? (
         <div className="mt-2">
@@ -134,6 +152,9 @@ export function TogetherPanel({ className, compact = false }: { className?: stri
             disabled={handle.trim().length < 2}
           >
             Send invite
+          </Button>
+          <Button type="button" variant="secondary" size={compact ? "compact" : "default"} onClick={startJudgeDemo}>
+            Try together demo
           </Button>
         </form>
       )}
