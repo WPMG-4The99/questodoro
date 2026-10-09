@@ -1,4 +1,5 @@
-const STORAGE_KEY = "questodoro:callsign";
+const SESSION_KEY = "questodoro:callsign";
+const LEGACY_KEY = "questodoro:callsign";
 
 export type CallSign = {
   handle: string;
@@ -17,7 +18,7 @@ export function pinOk(value: string) {
 export function readCallSign(): CallSign | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CallSign>;
     const handle = typeof parsed.handle === "string" ? parsed.handle.trim() : "";
@@ -30,5 +31,6 @@ export function readCallSign(): CallSign | null {
 }
 
 export function writeCallSign(callSign: CallSign) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(callSign));
+  window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(callSign));
+  window.localStorage.removeItem(LEGACY_KEY);
 }

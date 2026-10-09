@@ -60,7 +60,8 @@ import {
   unlockContext,
 } from "@/lib/questodoro/missions";
 
-const STORAGE_KEY = "questodoro:v1";
+const SESSION_BOARD_KEY = "questodoro:v1";
+const LEGACY_BOARD_KEY = "questodoro:v1";
 
 export type DailyRollup = {
   dateKey: string;
@@ -292,7 +293,14 @@ function savedTogether(raw: unknown) {
 function readPersist(): PersistShape | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    let raw = window.sessionStorage.getItem(SESSION_BOARD_KEY);
+    if (!raw) {
+      raw = window.localStorage.getItem(LEGACY_BOARD_KEY);
+      if (raw) {
+        window.sessionStorage.setItem(SESSION_BOARD_KEY, raw);
+        window.localStorage.removeItem(LEGACY_BOARD_KEY);
+      }
+    }
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersistShape>;
     const today = localDay();
@@ -363,7 +371,7 @@ function readPersist(): PersistShape | null {
 
 function writePersist(state: PersistShape) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistFields(state)));
+  window.sessionStorage.setItem(SESSION_BOARD_KEY, JSON.stringify(persistFields(state)));
 }
 
 function rollDay(stats: QuestStats): QuestStats {
@@ -703,6 +711,14 @@ function ingestRoom(room: TogetherRoom) {
     }));
   const checkIns = extra.length ? [...s.checkIns, ...extra].slice(-MAX_CHECK_INS) : s.checkIns;
   const missions = applyMissionTitle(s.missions, room.missionTitle);
+  const unlockedRewards =
+    selfDone && partnerDone
+      ? syncRewardUnlocks(rewards, {
+          ...unlockContext(s.totalXp, s.streak, s.missionStreak),
+          today: s.todayDate,
+          togetherDone: true,
+        })
+      : rewards;
   const partnerHandle =
     s.togetherRole === "guest" ? room.hostHandle || s.partnerHandle : room.guestHandle || s.partnerHandle;
   const togetherId = missions[TOGETHER_SLOT]?.id;
@@ -711,7 +727,7 @@ function ingestRoom(room: TogetherRoom) {
     togetherPartnerDone: partnerDone,
     challengeTitle: room.missionTitle || s.challengeTitle,
     partnerHandle,
-    rewards,
+    rewards: unlockedRewards,
     checkIns,
     missions,
   };
@@ -1199,6 +1215,7 @@ export const useQuestStore = create<QuestState>((set, get) => ({
     const rewards = syncRewardUnlocks([...s.rewards, reward], {
       ...unlockContext(s.totalXp, s.streak, s.missionStreak),
       today: s.todayDate,
+      togetherDone: s.togetherSelfDone && s.togetherPartnerDone,
     });
     set({ rewards });
     persistNow();
