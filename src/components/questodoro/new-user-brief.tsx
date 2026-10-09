@@ -122,6 +122,7 @@ const judgeGroups = [
       "Write the Together mission.",
       "Select Send invite.",
       "Read the invite code.",
+      "To test pairing, open two tabs in the same browser (not incognito, not a second browser). Sign up a second handle in Tab 2, send the invite from Tab 1, then click Confirm Partner in Tab 1.",
       "Select How you doing?.",
     ],
   },
